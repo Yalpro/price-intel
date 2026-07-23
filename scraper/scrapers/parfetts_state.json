@@ -1,0 +1,69 @@
+{
+  "cookies": [
+    {
+      "name": "_ga",
+      "value": "GA1.1.1318740087.1784298770",
+      "domain": ".parfetts.co.uk",
+      "path": "/",
+      "expires": 1818858769.947572,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "token",
+      "value": "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIzIiwianRpIjoiZTYyMWU3ZmE3YmNmMmU3ODVjMjdhZWQ2NGM0MTYzNzFhNjdkZWIyYWM3ZWY5MDk1ZGZmOTZmOTBhZWY4ZTJhYjZhMTEwYzI3MmUzZWMxMTUiLCJpYXQiOjE3ODQyOTg3NjUsIm5iZiI6MTc4NDI5ODc2NSwiZXhwIjoxODE1ODM0NzY1LCJzdWIiOiIyMDIwOCIsInNjb3BlcyI6W119.bzdcFZzW0j6gT6DTyLlfpyI5Wst7Ht0qZwZJ3IJxwUh_Rjptwy8xGpKVuEpSJ4aKJoCsv1x25qHszr6M0yu6ZPcGo9QSricQ0w58jNOr5kVHpOMXwhGeP9DpZtI2uGO536OLt4UODPXFPl0ky_1V3OJ6pSKB3n34hJEBsfFztvYYvZ9LyEjIFaSe6MO0WoodCDIap151_b6oc4HvBVWOtF553JvwR9E_9EeIkMqKj_oxkHGa9UWdsWfX80vpGl09gzq5-wIR-PM01wSN5otW0JfdvGnADipZ0hcF-tazRhxsAY4jGAFY6ousPMZ6gVQMLIgWPN1saw2FP7ILjzv_cobw34nGdgMnONjcMQjajgWzG8x9ATj0Vxlo7LkTEsG34EDfEzQfrdm0PvXjjNINJm05K6WLblNeYZVMfsDeJw5xM4yV1RQIsQ_qOVM0xLjTvNIU14s6g0us3_7KiCp2SEABlxbf7vqz_qR9OkwbILXeiPmKR9YzYq4qjB3sMaKa9On15v8DdS2aDpLvvY9IcF7fX7TIoOLL5KwN9h8Qbr1cxZ7-8eUdc-CInUIua-WFX6gewOsLnR5iOMtO8_kxh7drskrQiOPDAlIBPlQkGyVqhBwFdnKCnTywL2gyuoZ_kN564WXIsyqSWID_9o71XiwXM0Zb-T4NbM-u5XvL96Q",
+      "domain": "online.parfetts.co.uk",
+      "path": "/",
+      "expires": 1815834783,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "parfetts-customer",
+      "value": "104764",
+      "domain": "online.parfetts.co.uk",
+      "path": "/",
+      "expires": 1815834788,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "parfetts-customer-branch",
+      "value": "2",
+      "domain": "online.parfetts.co.uk",
+      "path": "/",
+      "expires": 1815834788,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "_ga_CVG934KF49",
+      "value": "GS2.1.s1784298769$o1$g1$t1784298792$j37$l0$h0",
+      "domain": ".parfetts.co.uk",
+      "path": "/",
+      "expires": 1818858792.934549,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": [
+    {
+      "origin": "https://online.parfetts.co.uk",
+      "localStorage": [
+        {
+          "name": "parfetts-user-store",
+          "value": "{\"state\":{\"currentUser\":{\"id\":104764,\"email\":\"aikostoreltd@gmail.com\",\"business\":\"(cr) Aiko Store Ltd\",\"name\":\"Mr Muragesu Premakumaran\",\"address\":{\"line1\":\"196 Chester Road\",\"line2\":\"Warrington\",\"line3\":\"\",\"line4\":\"\",\"postcode\":\"WA4 6AR\",\"phone\":\"07552222701\"},\"depot\":\"Aintree\",\"notes\":[],\"branch\":2,\"fascia\":0,\"site\":\"parfetts\",\"isAdmin\":0,\"dropship_activated\":false,\"collection\":true,\"is_ordering\":false,\"self_onboarding\":0,\"acknowledge_modal\":true,\"is_gfg_modal_acknowledged\":true,\"account_status\":\"S\",\"groups\":\"D3 (Aintree),G3 (Aintree),SD (Aintree),Standard (Aintree)\",\"algolia_schemes\":[\"D3\",\"G3\",\"SD\",\"Standard\"],\"user_id\":20208,\"delivered\":false,\"walkthrough_completed\":false,\"created_at\":\"2024-04-17 14:13:13\",\"email_token\":null,\"balance\":0,\"eden_farm_activated\":false,\"eden_farm_fresh_code\":null,\"eden_farm_frozen_code\":null},\"accountProfile\":{\"selectedAccount\":{\"id\":104764,\"email\":\"aikostoreltd@gmail.com\",\"business\":\"(cr) Aiko Store Ltd\",\"name\":\"Mr Muragesu Premakumaran\",\"address\":{\"line1\":\"196 Chester Road\",\"line2\":\"Warrington\",\"line3\":\"\",\"line4\":\"\",\"postcode\":\"WA4 6AR\",\"phone\":\"07552222701\"},\"depot\":\"Aintree\",\"notes\":[],\"branch\":2,\"fascia\":0,\"site\":\"parfetts\",\"isAdmin\":0,\"dropship_activated\":false,\"collection\":true,\"is_ordering\":false,\"self_onboarding\":0,\"acknowledge_modal\":true,\"is_gfg_modal_acknowledged\":true,\"account_status\":\"S\",\"groups\":\"D3 (Aintree),G3 (Aintree),SD (Aintree),Standard (Aintree)\",\"algolia_schemes\":[\"D3\",\"G3\",\"SD\",\"Standard\"],\"user_id\":20208,\"delivered\":false,\"walkthrough_completed\":false,\"created_at\":\"2024-04-17 14:13:13\",\"email_token\":null,\"balance\":0,\"eden_farm_activated\":false,\"eden_farm_fresh_code\":null,\"eden_farm_frozen_code\":null}}},\"version\":0}"
+        },
+        {
+          "name": "algolia-client-js-5.55.1-VJVZPHA3Y7",
+          "value": "{\"{\\\"url\\\":\\\"VJVZPHA3Y7-dsn.algolia.net\\\",\\\"accept\\\":\\\"read\\\",\\\"protocol\\\":\\\"https\\\",\\\"status\\\":\\\"up\\\",\\\"lastUpdate\\\":1784298774258}\":{\"timestamp\":1784298775281,\"value\":{\"url\":\"VJVZPHA3Y7-dsn.algolia.net\",\"accept\":\"read\",\"protocol\":\"https\",\"status\":\"timed out\",\"lastUpdate\":1784298775278}},\"{\\\"url\\\":\\\"VJVZPHA3Y7-dsn.algolia.net\\\",\\\"accept\\\":\\\"read\\\",\\\"protocol\\\":\\\"https\\\",\\\"status\\\":\\\"up\\\",\\\"lastUpdate\\\":1784298789606}\":{\"timestamp\":1784298790607,\"value\":{\"url\":\"VJVZPHA3Y7-dsn.algolia.net\",\"accept\":\"read\",\"protocol\":\"https\",\"status\":\"timed out\",\"lastUpdate\":1784298790606}},\"{\\\"url\\\":\\\"VJVZPHA3Y7-dsn.algolia.net\\\",\\\"accept\\\":\\\"read\\\",\\\"protocol\\\":\\\"https\\\",\\\"status\\\":\\\"up\\\",\\\"lastUpdate\\\":1784298789607}\":{\"timestamp\":1784298790608,\"value\":{\"url\":\"VJVZPHA3Y7-dsn.algolia.net\",\"accept\":\"read\",\"protocol\":\"https\",\"status\":\"timed out\",\"lastUpdate\":1784298790608}},\"{\\\"url\\\":\\\"VJVZPHA3Y7-dsn.algolia.net\\\",\\\"accept\\\":\\\"read\\\",\\\"protocol\\\":\\\"https\\\",\\\"status\\\":\\\"up\\\",\\\"lastUpdate\\\":1784298789608}\":{\"timestamp\":1784298790609,\"value\":{\"url\":\"VJVZPHA3Y7-dsn.algolia.net\",\"accept\":\"read\",\"protocol\":\"https\",\"status\":\"timed out\",\"lastUpdate\":1784298790609}},\"{\\\"url\\\":\\\"VJVZPHA3Y7-dsn.algolia.net\\\",\\\"accept\\\":\\\"read\\\",\\\"protocol\\\":\\\"https\\\",\\\"status\\\":\\\"up\\\",\\\"lastUpdate\\\":1784298789609}\":{\"timestamp\":1784298790610,\"value\":{\"url\":\"VJVZPHA3Y7-dsn.algolia.net\",\"accept\":\"read\",\"protocol\":\"https\",\"status\":\"timed out\",\"lastUpdate\":1784298790610}}}"
+        }
+      ]
+    }
+  ]
+}
