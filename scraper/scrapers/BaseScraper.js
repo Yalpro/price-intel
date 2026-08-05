@@ -221,6 +221,10 @@ class BaseScraper {
   }
 
   validateCandidates(csvProduct, candidates, strategy) {
+    if (!candidates || candidates.length === 0) {
+      return { result_status: 'not_found', validation_score: 0, validation_reason: 'No candidates found.' };
+    }
+
     let bestCandidate = null;
     let highestScore = -1;
     let isTie = false;
@@ -240,8 +244,12 @@ class BaseScraper {
       }
     }
 
-    if (!bestCandidate) {
-      return { result_status: 'not_found', validation_score: 0, validation_reason: 'No candidates found.' };
+    // Classification Rules:
+    // 1. Explicit metadata conflict (score === 0) -> REJECTED
+    // 2. Default un-matched candidates (score <= 50 with no explicit metadata match) -> NOT_FOUND
+    // 3. Plausible candidate with explicit metadata match (score >= 70) -> SUCCESS or AMBIGUOUS (if tied)
+    if (!bestCandidate || (highestScore <= 50 && bestCandidate.result_status !== 'rejected')) {
+      return { result_status: 'not_found', validation_score: 0, validation_reason: 'Candidates returned but none matched product metadata.' };
     }
 
     if (isTie) {
@@ -374,7 +382,7 @@ class BaseScraper {
       matched.push('supplier_barcode_search');
     }
 
-    let status = 'rejected';
+    let status = 'not_found';
     if (score >= 90) status = 'success';
     else if (score >= 60) status = 'ambiguous';
 

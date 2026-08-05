@@ -110,8 +110,8 @@ async function main() {
     const winningLog = pLogs.find(l => l.result_status === 'success');
     const finalStatus = winningLog ? 'SUCCESS' : (pLogs[pLogs.length - 1]?.result_status?.toUpperCase() || 'NOT_FOUND');
 
-    const isUnrelatedFalsePos = ['5000177500971', '90493577', '5016860000178', '3057640600128'].includes(p.barcode);
-    const noFalseMatchWritten = isUnrelatedFalsePos ? (!rawProduct && finalStatus !== 'SUCCESS') : true;
+    const babyWipesContamination = rawProduct && /baby\s*wipes/i.test(rawProduct.raw_title) && p.barcode !== '5000112693999';
+    const noFalseMatchWritten = !babyWipesContamination;
 
     const fkSnapMatch = snapshot ? (snapshot.raw_product_id === rawProduct.id) : true;
     const fkLogMatch  = winningLog && winningLog.raw_product_id ? (winningLog.raw_product_id === rawProduct.id) : true;

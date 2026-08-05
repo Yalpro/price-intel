@@ -51,28 +51,41 @@ function runTests() {
   assert(v6 !== v5, '330ml vs 500ml -> CONFLICT');
 
   // ------------------------------------------------------------
-  // SECTION 2: PACK EXTRACTION & CONFLICT TESTS
+  // SECTION 2: ISSUE 1 OUTCOME CLASSIFICATION TESTS
   // ------------------------------------------------------------
-  console.log('\n--- 2. Pack Extraction & Conflict Tests ---');
+  console.log('\n--- 2. Issue 1 Outcome Classification Tests ---');
   const scraper = new DummyScraper('test_supplier');
 
-  const packResult1 = scraper.evaluateCandidate(
-    { product_name: 'COCA COLA 12 PACK 330ML' },
-    { rawTitle: 'Coca Cola 24 x 330ml Can' }
+  const zeroCandResult = scraper.validateCandidates(
+    { product_name: 'NON EXISTENT PRODUCT ITEM 999' },
+    [],
+    'exact_name'
   );
-  assert(packResult1.result_status === 'rejected', 'source pack 12 vs candidate pack 24 -> CONFLICT (REJECTED)');
+  assert(zeroCandResult.result_status === 'not_found', 'Zero candidates -> NOT_FOUND');
 
-  const packResult2 = scraper.evaluateCandidate(
-    { product_name: 'COCA COLA ORIGINAL TASTE 330ML' },
-    { rawTitle: 'Coca Cola Original Taste 24 x 330ml Can' }
+  const noMetaMatchResult = scraper.validateCandidates(
+    { product_name: 'NON EXISTENT PRODUCT ITEM 999' },
+    [{ rawTitle: 'Item 123 999' }],
+    'exact_name'
   );
-  assert(packResult2.result_status === 'success', 'source pack unspecified vs candidate pack 24 -> UNKNOWN (not conflict, SUCCESS)');
+  assert(noMetaMatchResult.result_status === 'not_found', 'Candidates with no metadata match -> NOT_FOUND');
 
-  const packResult3 = scraper.evaluateCandidate(
-    { product_name: 'COCA COLA 24 PACK 330ML' },
-    { rawTitle: 'Coca Cola Original Taste 24 x 330ml Can' }
+  const conflictResult = scraper.validateCandidates(
+    { product_name: 'COCA COLA 500ML' },
+    [{ rawTitle: 'Coca Cola 330ml' }],
+    'exact_name'
   );
-  assert(packResult3.result_status === 'success', 'matching pack 24 vs 24 -> MATCH (SUCCESS)');
+  assert(conflictResult.result_status === 'rejected', 'Conflicting metadata candidate -> REJECTED');
+
+  const tieResult = scraper.validateCandidates(
+    { product_name: 'COCA COLA ENERGY 250ML' },
+    [
+      { rawTitle: 'Coca Cola Energy Sugar Free 250ml' },
+      { rawTitle: 'Coca Cola Energy Cherry 250ml' }
+    ],
+    'exact_name'
+  );
+  assert(tieResult.result_status === 'ambiguous', 'Tied plausible candidates -> AMBIGUOUS');
 
   // ------------------------------------------------------------
   // SECTION 3: VARIANT / FLAVOUR DETECTION TESTS

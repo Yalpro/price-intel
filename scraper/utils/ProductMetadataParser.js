@@ -204,7 +204,7 @@ class ProductMetadataParser {
   }
 
   /**
-   * Normalizes core product title by stripping volume, weight, pack, PM pricing marks, container descriptors (bar, can, bottle), and brand.
+   * Normalizes core product title by stripping volume, weight, pack, PM pricing marks, container descriptors (bar, can, bottle), filler words (original, taste, pm, pmp), and brand.
    */
   static normalizeCoreTitle(text) {
     if (!text) return '';
@@ -214,15 +214,25 @@ class ProductMetadataParser {
       const reg = new RegExp(`\\b${brand.replace(/\s+/g, '\\s+')}\\b`, 'gi');
       cleaned = cleaned.replace(reg, '');
     }
-    // Strip generic container terms (bar, can, bottle, box, pk, pack)
-    cleaned = cleaned.replace(/\b(?:bar|can|cans|bottle|bottles|box|boxes|pk|pack|sheet|sheets|wipes)\b/gi, '');
+    // Strip generic container terms (bar, can, bottle, box, pk, pack) and filler words (original, taste, pm, pmp)
+    cleaned = cleaned.replace(/\b(?:bar|can|cans|bottle|bottles|box|boxes|pk|pack|sheet|sheets|wipes|original|taste|pm|pmp)\b/gi, '');
     return this.normalizeText(cleaned);
   }
 
-  /**
-   * Attempts to extract the brand based on common known brands or simple 
-   * heuristic (first 1-2 words).
-   */
+  static isKnownBrand(brand) {
+    if (!brand) return false;
+    const knownBrands = [
+      'coca cola', 'pepsi', 'sprite', 'fanta', 'dr pepper', 'cadbury', 'nestle',
+      'mars', 'snickers', 'walkers', 'kelloggs', 'heinz', 'red bull', 'monster',
+      'lucozade', 'ribena', 'oasis', 'gatorade', 'robinsons', 'schweppes',
+      'pringles', 'doritos', 'mccoys', 'hula hoops', 'haribo', 'rowntrees',
+      'smirnoff', 'gordons', 'fosters', 'carling', 'stella artois', 'budweiser',
+      'guinness', 'strongbow', 'thatchers', 'kopparberg', 'magners',
+      'volvic', 'evian', 'buxton', 'highland spring', 'delamere', 'go local'
+    ];
+    return knownBrands.includes(brand.toLowerCase());
+  }
+
   static extractBrand(text) {
     if (!text) return null;
     const knownBrands = [
@@ -232,20 +242,13 @@ class ProductMetadataParser {
       'pringles', 'doritos', 'mccoys', 'hula hoops', 'haribo', 'rowntrees',
       'smirnoff', 'gordons', 'fosters', 'carling', 'stella artois', 'budweiser',
       'guinness', 'strongbow', 'thatchers', 'kopparberg', 'magners',
-      'volvic', 'evian', 'buxton', 'highland spring'
+      'volvic', 'evian', 'buxton', 'highland spring', 'delamere', 'go local'
     ];
-    
+
     const lowerText = text.toLowerCase().replace(/[\-_]/g, ' ');
     for (const brand of knownBrands) {
       if (lowerText.includes(brand)) return brand;
     }
-    
-    // Fallback: use first word if longer than 2 characters
-    const words = this.cleanName(text).split(/\s+/).filter(Boolean);
-    if (words.length > 0 && words[0].length > 2) {
-      return words[0].toLowerCase();
-    }
-    
     return null;
   }
   /**
