@@ -82,7 +82,34 @@ const TEST_PRODUCTS = [
 ];
 
 const SUPPLIER_ID = 1; // Booker
-const FAKE_RUN_ID = 9999; // Isolated test — does not touch real scraper_runs
+
+async function createTestRun() {
+  const { data, error } = await supabase
+    .from('scraper_runs')
+    .insert({
+      supplier_id: SUPPLIER_ID,
+      status: 'running',
+      started_at: new Date().toISOString(),
+    })
+    .select('id')
+    .single();
+  if (error) throw new Error('Could not create test scraper_run: ' + error.message);
+  return data.id;
+}
+
+async function cleanupTestRun(runId, snapIds, logIds) {
+  // Delete test snapshots
+  if (snapIds.length) {
+    await supabase.from('price_snapshots').delete().in('id', snapIds);
+  }
+  // Delete test logs
+  if (logIds.length) {
+    await supabase.from('product_search_logs').delete().in('id', logIds);
+  }
+  // Delete the test run
+  await supabase.from('scraper_runs').delete().eq('id', runId);
+  console.log(`\n🧹 Cleanup: test scraper_run ${runId}, ${snapIds.length} snapshots, ${logIds.length} logs removed.`);
+}
 
 async function runFix1Test() {
   console.log('\n=== FIX 1 ISOLATED TEST: raw_product_id Linkage ===\n');
@@ -92,7 +119,13 @@ async function runFix1Test() {
     process.exit(1);
   }
 
+  // Create a real scraper_run row — scraper_run_id is NOT NULL in product_search_logs
+  const testRunId = await createTestRun();
+  console.log(`📋 Test scraper_run created: id = ${testRunId}`);
+
   const evidence = [];
+  const allSnapIds = [];
+  const allLogIds = [];
 
   for (const product of TEST_PRODUCTS) {
     console.log(`\n--- Testing: ${product.product_name} (${product.barcode}) ---`);
@@ -124,7 +157,7 @@ async function runFix1Test() {
     const { data: logData, error: logError } = await supabase
       .from('product_search_logs')
       .insert({
-        scraper_run_id: null,           // isolated test — no real run
+        scraper_run_id: testRunId,      // real run row — satisfies NOT NULL constraint
         supplier_id: SUPPLIER_ID,
         source_catalogue_key: product.barcode,
         barcode: product.barcode,
@@ -196,6 +229,8 @@ async function runFix1Test() {
       product_search_logs_id: logData.id,
       link_correct: snapData.raw_product_id === rawProduct.id,
     });
+    allSnapIds.push(snapData.id);
+    allLogIds.push(logData.id);
   }
 
   // ============================================================
@@ -251,6 +286,10 @@ async function runFix1Test() {
   console.log('\n=== FIX 1 TEST COMPLETE ===');
   console.log('Evidence JSON:');
   console.log(JSON.stringify(evidence, null, 2));
+
+  // Clean up ALL test-generated rows — do not leave orphaned test data
+  await cleanupTestRun(testRunId, allSnapIds, allLogIds);
+  console.log('✅ All test rows cleaned up. Production data untouched.');
 }
 
 runFix1Test().catch(console.error);
