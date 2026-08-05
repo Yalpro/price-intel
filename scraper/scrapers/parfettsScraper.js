@@ -255,8 +255,36 @@ class ParfettsScraper extends BaseScraper {
         }
 
         const price = priceData.length > 0 ? priceData[0] : null;
-        const addToCartCount = await pg.locator('button:has-text("Add"), button:has-text("Add to Trolley"), input[type="number"], .add-to-cart').count();
-        const inStock = addToCartCount > 0;
+
+        // FIX 4: Multi-signal stock detection (Priority order: OOS text > Disabled button > In Stock text > Enabled Add button > Qty input)
+        const pageText = (await pg.innerText('body')).toLowerCase();
+        const hasOutOfStockText = pageText.includes('out of stock') || pageText.includes('currently unavailable') || pageText.includes('discontinued');
+        const hasInStockText = pageText.includes('in stock') || pageText.includes('low stock');
+
+        const enabledAddBtnCount = await pg.locator('button[aria-label*="trolley" i]:not([disabled]), button[aria-label*="add" i]:not([disabled])').count();
+        const disabledAddBtnCount = await pg.locator('button[aria-label*="trolley" i][disabled], button[aria-label*="add" i][disabled], button.disabled').count();
+        const altProductsBtnCount = await pg.locator('button:has-text("View Alternative Products")').count();
+        const qtyInputCount = await pg.locator('input[type="number"]:not([disabled])').count();
+
+        const isExplicitOOS = hasOutOfStockText || altProductsBtnCount > 0;
+        const isDisabledBtn = disabledAddBtnCount > 0;
+        const isExplicitInStock = hasInStockText;
+        const isEnabledAddBtn = enabledAddBtnCount > 0 && altProductsBtnCount === 0;
+        const isQtyInputAvailable = qtyInputCount > 0;
+
+        const negSignals = (isExplicitOOS ? 1 : 0) + (isDisabledBtn ? 1 : 0);
+        const posSignals = (isExplicitInStock ? 1 : 0) + (isEnabledAddBtn ? 1 : 0) + (isQtyInputAvailable ? 1 : 0);
+
+        let inStock = null;
+        if (negSignals > 0 && posSignals > 0) {
+          inStock = null; // Conflicting signals -> UNKNOWN
+        } else if (negSignals > 0) {
+          inStock = false;
+        } else if (posSignals > 0) {
+          inStock = true;
+        } else {
+          inStock = null; // Zero signals -> UNKNOWN (never guess based on price)
+        }
         
         const promoBadgeCount = await pg.locator('[class*="promo"], [class*="badge"], [class*="offer"], .text-red-500:has-text("offer")').count();
         const promotionFlag = promoBadgeCount > 0 || (rawTitle && (rawTitle.toLowerCase().includes('promo') || rawTitle.toLowerCase().includes('offer')));
@@ -302,7 +330,33 @@ class ParfettsScraper extends BaseScraper {
               price = parseFloat(priceMatch[1]);
             }
 
-            const inStock = card.querySelectorAll('button, input[type="number"], .add-to-cart, [class*="add"]').length > 0;
+            // FIX 4: Multi-signal stock detection inside card context
+            const cardText = card.textContent.toLowerCase();
+            const hasOutOfStockText = cardText.includes('out of stock') || cardText.includes('currently unavailable') || cardText.includes('discontinued');
+            const hasInStockText = cardText.includes('in stock') || cardText.includes('low stock');
+
+            const allButtons = Array.from(card.querySelectorAll('button'));
+            const hasDisabledAddBtn = allButtons.some(b => b.disabled || b.hasAttribute('disabled') || b.classList.contains('disabled'));
+            const hasAltProductsBtn = allButtons.some(b => b.textContent.includes('View Alternative Products') || (b.getAttribute('aria-label') && b.getAttribute('aria-label').includes('alternative')));
+            const hasEnabledAddBtn = allButtons.some(b => !b.disabled && !b.hasAttribute('disabled') && !b.classList.contains('disabled') && (b.getAttribute('aria-label') && (b.getAttribute('aria-label').toLowerCase().includes('trolley') || b.getAttribute('aria-label').toLowerCase().includes('add'))));
+            const hasQuantityInput = card.querySelectorAll('input[type="number"]:not([disabled])').length > 0;
+
+            const isExplicitOOS = hasOutOfStockText || hasAltProductsBtn;
+            const isExplicitInStock = hasInStockText;
+
+            const negSignals = (isExplicitOOS ? 1 : 0) + (hasDisabledAddBtn ? 1 : 0);
+            const posSignals = (isExplicitInStock ? 1 : 0) + (hasEnabledAddBtn ? 1 : 0) + (hasQuantityInput ? 1 : 0);
+
+            let inStock = null;
+            if (negSignals > 0 && posSignals > 0) {
+              inStock = null; // Conflicting signals -> UNKNOWN
+            } else if (negSignals > 0) {
+              inStock = false;
+            } else if (posSignals > 0) {
+              inStock = true;
+            } else {
+              inStock = null; // Zero signals -> UNKNOWN (never guess based on price)
+            }
             const promo = card.textContent.toLowerCase().includes('promo') || card.textContent.toLowerCase().includes('offer');
             
             let barcode = null;
