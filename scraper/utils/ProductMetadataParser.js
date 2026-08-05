@@ -106,23 +106,117 @@ class ProductMetadataParser {
   }
 
   /**
-   * Extracts volume (ml, l, cl, litre)
+   * Extracts volume (ml, l, cl, litre, ltr) with canonical unit & value normalization.
+   * Examples: "1.5L", "1.5LTR", "1.5 litre" -> "1.5l"; "1500ml" -> "1.5l"; "500ml" -> "500ml".
    */
   static extractVolume(text) {
     if (!text) return null;
-    const regex = /(?:[xX*]|\b)(\d+(?:\.\d+)?\s*(?:ml|l|cl|litre|ltr|pint|pt))\b/i;
+    const regex = /(?:[xX*]|\b)(\d+(?:\.\d+)?\s*(?:ml|l|cl|litre|ltr|liter|pint|pt))\b/i;
     const match = text.match(regex);
-    return match ? this.normalizeText(match[1]) : null;
+    if (!match) return null;
+
+    let raw = match[1].toLowerCase().replace(/\s+/g, '');
+    const valMatch = raw.match(/^(\d+(?:\.\d+)?)([a-z]+)$/);
+    if (!valMatch) return this.normalizeText(raw);
+
+    let num = parseFloat(valMatch[1]);
+    let unit = valMatch[2];
+
+    if (['litre', 'ltr', 'liter'].includes(unit)) unit = 'l';
+    if (['mls', 'millilitre', 'millilitres'].includes(unit)) unit = 'ml';
+
+    // 1500ml -> 1.5l conversion if whole/decimal litres
+    if (unit === 'ml' && num >= 1000 && num % 100 === 0) {
+      return `${(num / 1000).toString()}l`;
+    }
+    if (unit === 'l') {
+      return `${num.toString()}l`;
+    }
+    return `${num.toString()}${unit}`;
   }
 
   /**
-   * Extracts weight (g, kg, oz)
+   * Extracts weight (g, kg, oz) with canonical unit & value normalization.
+   * Examples: "1000g" -> "1kg"; "110g" -> "110g"; "1.5kg" -> "1.5kg".
    */
   static extractWeight(text) {
     if (!text) return null;
     const regex = /(?:[xX*]|\b)(\d+(?:\.\d+)?\s*(?:g|kg|oz))\b/i;
     const match = text.match(regex);
-    return match ? this.normalizeText(match[1]) : null;
+    if (!match) return null;
+
+    let raw = match[1].toLowerCase().replace(/\s+/g, '');
+    const valMatch = raw.match(/^(\d+(?:\.\d+)?)([a-z]+)$/);
+    if (!valMatch) return this.normalizeText(raw);
+
+    let num = parseFloat(valMatch[1]);
+    let unit = valMatch[2];
+
+    if (unit === 'g' && num >= 1000 && num % 100 === 0) {
+      return `${(num / 1000).toString()}kg`;
+    }
+    if (unit === 'kg') {
+      return `${num.toString()}kg`;
+    }
+    return `${num.toString()}${unit}`;
+  }
+
+  /**
+   * Conservative variant/flavour detection.
+   * Rejects only when BOTH source and candidate specify explicit, conflicting variants.
+   */
+  static extractVariant(text) {
+    if (!text) return null;
+    const lower = text.toLowerCase().replace(/[\-_/()]/g, ' ');
+
+    const knownVariants = [
+      { canonical: 'lime', patterns: ['lime'] },
+      { canonical: 'cherry', patterns: ['cherry float', 'cherry'] },
+      { canonical: 'zero', patterns: ['zero sugar', 'zero'] },
+      { canonical: 'diet', patterns: ['diet'] },
+      { canonical: 'original', patterns: ['original taste', 'original'] },
+      { canonical: 'mango', patterns: ['mango loco', 'mango'] },
+      { canonical: 'tropical', patterns: ['tropical'] },
+      { canonical: 'strawberry', patterns: ['strawberry'] },
+      { canonical: 'banana', patterns: ['banana'] },
+      { canonical: 'peach', patterns: ['peach'] },
+      { canonical: 'orange', patterns: ['orange'] },
+      { canonical: 'apple', patterns: ['apple'] },
+      { canonical: 'vanilla', patterns: ['vanilla'] },
+      { canonical: 'sparkling', patterns: ['sparkling'] },
+      { canonical: 'still', patterns: ['still'] },
+      { canonical: 'salted', patterns: ['salted'] },
+      { canonical: 'sweet', patterns: ['sweet'] },
+      { canonical: 'bbq', patterns: ['bbq beef', 'bbq'] },
+      { canonical: 'cheese_onion', patterns: ['cheese & onion', 'cheese and onion'] },
+      { canonical: 'salt_vinegar', patterns: ['salt & vinegar', 'salt and vinegar'] },
+    ];
+
+    for (const item of knownVariants) {
+      for (const p of item.patterns) {
+        const escaped = p.replace('&', '(?:&|and)');
+        const reg = new RegExp(`\\b${escaped}\\b`, 'i');
+        if (reg.test(lower)) return item.canonical;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Normalizes core product title by stripping volume, weight, pack, PM pricing marks, container descriptors (bar, can, bottle), and brand.
+   */
+  static normalizeCoreTitle(text) {
+    if (!text) return '';
+    let cleaned = this.cleanName(text);
+    const brand = this.extractBrand(text);
+    if (brand) {
+      const reg = new RegExp(`\\b${brand.replace(/\s+/g, '\\s+')}\\b`, 'gi');
+      cleaned = cleaned.replace(reg, '');
+    }
+    // Strip generic container terms (bar, can, bottle, box, pk, pack)
+    cleaned = cleaned.replace(/\b(?:bar|can|cans|bottle|bottles|box|boxes|pk|pack|sheet|sheets|wipes)\b/gi, '');
+    return this.normalizeText(cleaned);
   }
 
   /**

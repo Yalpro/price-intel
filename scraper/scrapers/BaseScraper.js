@@ -245,7 +245,13 @@ class BaseScraper {
     }
 
     if (isTie) {
-        const exactMatch = topCandidates.find(c => c.rawTitle && c.rawTitle.toLowerCase() === csvProduct.product_name.toLowerCase());
+        const exactMatch = topCandidates.find(c =>
+          c.rawTitle && (
+            c.rawTitle.toLowerCase() === csvProduct.product_name.toLowerCase() ||
+            ProductMetadataParser.titlesMatchAfterSuffixStrip(csvProduct.product_name, c.rawTitle) ||
+            ProductMetadataParser.normalizeCoreTitle(csvProduct.product_name) === ProductMetadataParser.normalizeCoreTitle(c.rawTitle)
+          )
+        );
         if (exactMatch) {
             return exactMatch;
         }
@@ -286,7 +292,13 @@ class BaseScraper {
     const candWeight = ProductMetadataParser.extractWeight(candName);
     
     const csvPack = ProductMetadataParser.extractPackSize(csvName);
-    const candPack = ProductMetadataParser.extractPackSize(csvName) || ProductMetadataParser.extractPackSize(candidate.rawPackInfo);
+    const candPack = ProductMetadataParser.extractPackSize(candName) || ProductMetadataParser.extractPackSize(candidate.rawPackInfo);
+
+    const csvQty = ProductMetadataParser.extractQuantity(csvName);
+    const candQty = ProductMetadataParser.extractQuantity(candName) || ProductMetadataParser.extractQuantity(candidate.rawPackInfo);
+
+    const csvVar = ProductMetadataParser.extractVariant(csvName);
+    const candVar = ProductMetadataParser.extractVariant(candName);
 
     const conflicts = [];
     const matched = [];
@@ -295,34 +307,42 @@ class BaseScraper {
     if (csvBrand && candBrand && csvBrand !== candBrand) conflicts.push('brand');
     if (csvVol && candVol && csvVol !== candVol) conflicts.push('volume');
     if (csvWeight && candWeight && csvWeight !== candWeight) conflicts.push('weight');
-    if (csvPack && candPack && csvPack !== candPack) conflicts.push('pack');
+    if (csvPack && candPack && csvPack !== candPack && (!csvQty || !candQty || csvQty !== candQty)) conflicts.push('pack');
+    if (csvQty && candQty && csvQty !== candQty && !conflicts.includes('pack')) conflicts.push('pack');
+    if (csvVar && candVar && csvVar !== candVar) conflicts.push('variant');
 
     if (conflicts.length > 0) {
-      return { result_status: 'rejected', validation_score: 0, validation_reason: `Metadata conflicts detected.`, conflicting_fields: conflicts.join(',') };
+      return { result_status: 'rejected', validation_score: 0, validation_reason: `Metadata conflicts detected: ${conflicts.join(', ')}.`, conflicting_fields: conflicts.join(',') };
     }
 
     // Match detection (Only explicit matches count)
     if (csvBrand && candBrand && csvBrand === candBrand) matched.push('brand');
     if (csvVol && candVol && csvVol === candVol) matched.push('volume');
     if (csvWeight && candWeight && csvWeight === candWeight) matched.push('weight');
-    if (csvPack && candPack && csvPack === candPack) matched.push('pack');
+    if ((csvPack && candPack && csvPack === candPack) || (csvQty && candQty && csvQty === candQty)) matched.push('pack');
+    if (csvVar && candVar && csvVar === candVar) matched.push('variant');
 
     const brandMatched = matched.includes('brand');
     const volOrWeightMatched = matched.includes('volume') || matched.includes('weight');
     const packMatched = matched.includes('pack');
+    const variantMatched = matched.includes('variant');
+    const coreTitleMatched = (
+      ProductMetadataParser.normalizeCoreTitle(csvName) === ProductMetadataParser.normalizeCoreTitle(candName) ||
+      ProductMetadataParser.titlesMatchAfterSuffixStrip(csvName, candName) ||
+      (csvBrand && candBrand && csvBrand === candBrand && (csvVol || csvWeight) && ProductMetadataParser.cleanName(csvName).toLowerCase().includes(ProductMetadataParser.cleanName(candName).toLowerCase()))
+    );
 
-    let score = 50; // Default rejected if nothing explicitly matches
+    let score = 50; // Default if nothing explicitly matches
 
-    if (brandMatched && volOrWeightMatched && packMatched) {
-      score = 90; // Success threshold reached
+    // Requirement 4: Safe SUCCESS Scoring Combinations
+    if ((brandMatched || coreTitleMatched) && (volOrWeightMatched || coreTitleMatched) && (coreTitleMatched || variantMatched || packMatched) && conflicts.length === 0) {
+      score = 90; // Safe SUCCESS threshold
     } else if (brandMatched && (volOrWeightMatched || packMatched)) {
       score = 80; // Ambiguous
     } else if (brandMatched) {
       score = 70; // Ambiguous
-    } else if (ProductMetadataParser.normalizeText(csvName) === ProductMetadataParser.normalizeText(candName)) {
-      score = 85; // Exact title match but missing explicit metadata = strong ambiguous
-    } else if (ProductMetadataParser.titlesMatchAfterSuffixStrip(csvName, candName)) {
-      score = 90;
+    } else if (coreTitleMatched) {
+      score = 85; // Strong ambiguous
     } else if (volOrWeightMatched || packMatched) {
       score = 60; // Weak ambiguous
     }
