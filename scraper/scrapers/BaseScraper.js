@@ -476,6 +476,8 @@ class BaseScraper {
         matched_fields: evaluated.matched_fields,
         matched_supplier_product_title: evaluated.rawTitle,
         matched_supplier_barcode: evaluated.rawBarcode,
+        selected_candidate_code: evaluated.rawProductCode || evaluated.rawBarcode || null,
+        selected_candidate_url: evaluated.rawUrl || null,
         candidate_count: candidates.length,
         search_duration_ms: searchDuration,
         error_message: errorMessage,
@@ -495,6 +497,9 @@ class BaseScraper {
         const rawTitle = finalResult.rawTitle || product.product_name;
         const rawPackInfo = ProductMetadataParser.sanitizePackInfo(finalResult.rawPackInfo);
 
+        const rawProductCode = finalResult.rawProductCode || finalResult.rawBarcode || null;
+        const rawUrl = finalResult.rawUrl || null;
+
         const { data: rawProduct, error: rawError } = await supabase
           .from('raw_products')
           .upsert(
@@ -502,6 +507,8 @@ class BaseScraper {
               supplier_id: this.supplierRow.id,
               raw_title: rawTitle,
               raw_barcode: product.barcode,
+              raw_product_code: rawProductCode,
+              raw_url: rawUrl,
               raw_pack_info: rawPackInfo,
               scraped_at: now,
             },

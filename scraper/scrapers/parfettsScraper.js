@@ -238,23 +238,19 @@ class ParfettsScraper extends BaseScraper {
         }
 
         const priceData = await pg.evaluate(() => {
-          const spans = Array.from(document.querySelectorAll('span.font-bold, span[class*="price"], p[class*="price"]'));
-          const prices = [];
-          for (const span of spans) {
-            const match = span.textContent.trim().match(/^£\s?(\d+\.\d{2})$/);
-            if (match && parseFloat(match[1]) > 0) prices.push(parseFloat(match[1]));
-          }
-          return prices;
+          let bodyText = document.body.innerText;
+          const h1 = document.querySelector('h1, h2');
+          if (h1) bodyText = bodyText.replace(h1.innerText, '');
+          bodyText = bodyText.replace(/\b(?:RRP:?\s*£?\d+(?:\.\d{2})?|PM\s*£?\d+(?:\.\d{2})?)\b/gi, '');
+          
+          const matches = bodyText.match(/£(\d+\.\d{2})/g) || [];
+          return matches.map(m => parseFloat(m.replace('£', ''))).filter(p => p > 0);
         });
 
-        if (!priceData || priceData.length === 0) {
-          const pageContent = await pg.content();
-          const allPriceMatches = pageContent.match(/£(\d+\.\d{2})/g) || [];
-          const nonZeroPrices = allPriceMatches.map(p => parseFloat(p.replace('£', ''))).filter(p => p > 0);
-          if (nonZeroPrices.length > 0) priceData.push(nonZeroPrices[0]);
-        }
-
         const price = priceData.length > 0 ? priceData[0] : null;
+        const currentUrl = pg.url();
+        const codeMatch = currentUrl.match(/\/product\/(\d+)/);
+        const rawProductCode = codeMatch ? codeMatch[1] : null;
 
         // FIX 4: Multi-signal stock detection (Priority order: OOS text > Disabled button > In Stock text > Enabled Add button > Qty input)
         const pageText = (await pg.innerText('body')).toLowerCase();
@@ -295,7 +291,9 @@ class ParfettsScraper extends BaseScraper {
           price,
           inStock,
           promotionFlag,
-          rawBarcode: null // Parfetts PDP doesn't reliably expose barcode in DOM
+          rawBarcode: rawProductCode,
+          rawProductCode,
+          rawUrl: currentUrl
         });
       } else {
         // Search results page with multiple items
@@ -324,9 +322,16 @@ class ParfettsScraper extends BaseScraper {
               if (packInfo) break;
             }
 
+            // FIX 2: Strip title and RRP/PMP text to extract authentic wholesale case price only
+            let cardTextForPrice = card.textContent;
+            if (title) {
+              cardTextForPrice = cardTextForPrice.replace(title, '');
+            }
+            cardTextForPrice = cardTextForPrice.replace(/\b(?:PM\s*£?\d+(?:\.\d{2})?|RRP:?\s*£?\d+(?:\.\d{2})?)\b/gi, '');
+
             let price = null;
-            const priceMatch = card.textContent.match(/£(\d+\.\d{2})/);
-            if (priceMatch) {
+            const priceMatch = cardTextForPrice.match(/£(\d+\.\d{2})/);
+            if (priceMatch && parseFloat(priceMatch[1]) > 0) {
               price = parseFloat(priceMatch[1]);
             }
 
@@ -359,11 +364,16 @@ class ParfettsScraper extends BaseScraper {
             }
             const promo = card.textContent.toLowerCase().includes('promo') || card.textContent.toLowerCase().includes('offer');
             
-            let barcode = null;
+            let rawUrl = null;
+            let rawProductCode = null;
             const link = card.querySelector('a[href*="/product/"]');
             if (link) {
-              const hrefMatch = link.getAttribute('href').match(/\/product\/(\d+)/);
-              if (hrefMatch) barcode = hrefMatch[1];
+              const rawHref = link.getAttribute('href');
+              if (rawHref) {
+                rawUrl = rawHref.startsWith('http') ? rawHref : `https://online.parfetts.co.uk${rawHref}`;
+                const codeMatch = rawHref.match(/\/product\/(\d+)/);
+                if (codeMatch) rawProductCode = codeMatch[1];
+              }
             }
 
             return {
@@ -372,7 +382,9 @@ class ParfettsScraper extends BaseScraper {
               price,
               inStock,
               promotionFlag: promo,
-              rawBarcode: barcode
+              rawBarcode: rawProductCode,
+              rawProductCode,
+              rawUrl
             };
           });
         });
