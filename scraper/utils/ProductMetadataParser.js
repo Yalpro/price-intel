@@ -68,7 +68,7 @@ class ProductMetadataParser {
    */
   static extractVolume(text) {
     if (!text) return null;
-    const regex = /\b(\d+(?:\.\d+)?\s*(?:ml|l|cl|litre|ltr|pint|pt))\b/i;
+    const regex = /(?:[xX*]|\b)(\d+(?:\.\d+)?\s*(?:ml|l|cl|litre|ltr|pint|pt))\b/i;
     const match = text.match(regex);
     return match ? this.normalizeText(match[1]) : null;
   }
@@ -78,7 +78,7 @@ class ProductMetadataParser {
    */
   static extractWeight(text) {
     if (!text) return null;
-    const regex = /\b(\d+(?:\.\d+)?\s*(?:g|kg|oz))\b/i;
+    const regex = /(?:[xX*]|\b)(\d+(?:\.\d+)?\s*(?:g|kg|oz))\b/i;
     const match = text.match(regex);
     return match ? this.normalizeText(match[1]) : null;
   }
@@ -99,18 +99,74 @@ class ProductMetadataParser {
       'volvic', 'evian', 'buxton', 'highland spring'
     ];
     
-    const lowerText = text.toLowerCase();
+    const lowerText = text.toLowerCase().replace(/[\-_]/g, ' ');
     for (const brand of knownBrands) {
       if (lowerText.includes(brand)) return brand;
     }
     
     // Fallback: use first word if longer than 2 characters
-    const words = this.cleanName(text).split(' ');
+    const words = this.cleanName(text).split(/\s+/).filter(Boolean);
     if (words.length > 0 && words[0].length > 2) {
       return words[0].toLowerCase();
     }
     
     return null;
+  }
+  /**
+   * Strips trailing pack-count quantity suffixes that supplier titles append
+   * but source catalogue titles omit. Examples: "54s", "24s", "12s".
+   *
+   * These are pack quantity descriptors (e.g. "54 sheets", "24 sachets") that
+   * Parfetts adds to the end of product titles. They are NOT volumes (ml, l),
+   * weights (g, kg), or meaningful product discriminators.
+   *
+   * Pattern: \b\d{1,3}s\b at the very end of the string (trailing only).
+   * - Matches: "54s", "24s", "12s"
+   * - Does NOT match: "500ml", "89p", "PM", mid-title occurrences
+   *
+   * @returns {string} text with trailing pack-count suffix removed, or original text unchanged
+   */
+  static stripPackCountSuffix(text) {
+    if (!text) return text;
+    return String(text).replace(/\s+\d{1,3}s\b\s*$/i, '').trim();
+  }
+
+  /**
+   * Compares two product titles for a near-exact match after stripping trailing
+   * pack-count suffixes (e.g. "54s", "24s") from both sides.
+   *
+   * Safety rules:
+   *   1. If BOTH sides have a trailing pack-count suffix AND the suffix values differ
+   *      (e.g. source "24s" vs candidate "54s"), returns false — prevents a 24-sheet
+   *      product matching a 54-sheet product.
+   *   2. If only the candidate has the suffix (typical case: Parfetts adds "54s",
+   *      source catalogue does not), strip it from the candidate and compare.
+   *   3. If neither side has the suffix, compare as-is (equivalent to a normal
+   *      normalizeText comparison).
+   *
+   * @param {string} csvTitle   - Source catalogue product name
+   * @param {string} candTitle  - Supplier product title from scraper
+   * @returns {boolean}
+   */
+  static titlesMatchAfterSuffixStrip(csvTitle, candTitle) {
+    if (!csvTitle || !candTitle) return false;
+
+    const SUFFIX_RE = /\s+(\d{1,3})s\b\s*$/i;
+
+    const csvSuffixMatch  = String(csvTitle).match(SUFFIX_RE);
+    const candSuffixMatch = String(candTitle).match(SUFFIX_RE);
+
+    // Safety rule 1: both have a suffix — compare the suffix values.
+    // If they differ (e.g. "24s" vs "54s"), these are different pack sizes → no match.
+    if (csvSuffixMatch && candSuffixMatch) {
+      if (csvSuffixMatch[1] !== candSuffixMatch[1]) return false;
+    }
+
+    // Strip suffix from both sides and normalize
+    const csvStripped  = this.normalizeText(this.stripPackCountSuffix(csvTitle));
+    const candStripped = this.normalizeText(this.stripPackCountSuffix(candTitle));
+
+    return csvStripped.length > 0 && csvStripped === candStripped;
   }
 }
 

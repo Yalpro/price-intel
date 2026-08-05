@@ -281,6 +281,14 @@ class BaseScraper {
       score = 70; // Ambiguous
     } else if (ProductMetadataParser.normalizeText(csvName) === ProductMetadataParser.normalizeText(candName)) {
       score = 85; // Exact title match but missing explicit metadata = strong ambiguous
+    } else if (ProductMetadataParser.titlesMatchAfterSuffixStrip(csvName, candName)) {
+      // FIX 2 follow-up: near-exact title match — titles are identical after stripping
+      // trailing pack-count suffixes (e.g. "54s", "24s") that suppliers append but
+      // source catalogues omit. Safety: if BOTH sides have a suffix with different
+      // values (e.g. source "24s" vs candidate "54s"), titlesMatchAfterSuffixStrip
+      // returns false and this branch is not entered.
+      // No conflicts reached this point (early return above) + titles match = success.
+      score = 90;
     } else if (volOrWeightMatched || packMatched) {
       score = 60; // Weak ambiguous
     }
