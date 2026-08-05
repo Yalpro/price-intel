@@ -40,7 +40,7 @@ class BaseScraper {
     };
   }
 
-  async delay(ms = 2000) {
+  async delay(ms = 500) {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
@@ -49,7 +49,15 @@ class BaseScraper {
     return new Promise((resolve, reject) => {
       fs.createReadStream(filePath)
         .pipe(csv())
-        .on('data', (data) => results.push(data))
+        .on('data', (data) => {
+          const normalized = {};
+          for (const key of Object.keys(data)) {
+            const normKey = key.trim().toLowerCase().replace(/\s+/g, '_');
+            normalized[normKey] = data[key];
+          }
+          if (!normalized.barcode && normalized.ean) normalized.barcode = normalized.ean;
+          results.push(normalized);
+        })
         .on('end', () => resolve(results))
         .on('error', reject);
     });
@@ -120,13 +128,22 @@ class BaseScraper {
   }
 
   async logSearchResult(logData) {
+    // FIX 1: Return the inserted log row ID so the caller can backfill raw_product_id
+    // on the winning success log entry after the raw_products upsert completes.
     try {
-      const { error } = await supabase.from('product_search_logs').insert(logData);
+      const { data, error } = await supabase
+        .from('product_search_logs')
+        .insert(logData)
+        .select('id')
+        .single();
       if (error) {
         console.error(`[${this.supplierName}] Failed to insert search log:`, error.message);
+        return null;
       }
+      return data?.id ?? null;
     } catch (err) {
       console.error(`[${this.supplierName}] Exception inserting search log:`, err.message);
+      return null;
     }
   }
 
@@ -167,6 +184,7 @@ class BaseScraper {
     let bestCandidate = null;
     let highestScore = -1;
     let isTie = false;
+    let topCandidates = [];
 
     for (const candidate of candidates) {
       const evaluation = this.evaluateCandidate(csvProduct, candidate, strategy);
@@ -174,9 +192,11 @@ class BaseScraper {
       if (evaluation.validation_score > highestScore) {
         highestScore = evaluation.validation_score;
         bestCandidate = { ...candidate, ...evaluation };
+        topCandidates = [bestCandidate];
         isTie = false;
       } else if (evaluation.validation_score === highestScore && highestScore > 0) {
         isTie = true;
+        topCandidates.push({ ...candidate, ...evaluation });
       }
     }
 
@@ -184,9 +204,16 @@ class BaseScraper {
       return { result_status: 'not_found', validation_score: 0, validation_reason: 'No candidates found.' };
     }
 
-    if (isTie && highestScore < 100) {
-      bestCandidate.result_status = 'ambiguous';
-      bestCandidate.validation_reason = 'Multiple candidates tied with the highest valid score.';
+    if (isTie) {
+        const exactMatch = topCandidates.find(c => c.rawTitle && c.rawTitle.toLowerCase() === csvProduct.product_name.toLowerCase());
+        if (exactMatch) {
+            return exactMatch;
+        }
+        return { 
+            result_status: 'ambiguous', 
+            validation_score: highestScore, 
+            validation_reason: 'Multiple candidates tied with the highest valid score.' 
+        };
     }
 
     return bestCandidate;
@@ -260,10 +287,12 @@ class BaseScraper {
 
     // Barcode strategy boost
     if (strategy === 'barcode' || strategy === 'normalized_barcode') {
-      if (score >= 90) {
+      if (brandMatched && conflicts.length === 0) {
+        score = 90; // Direct barcode search match with matching brand and zero conflicts = Success!
+      } else if (score >= 90) {
         score = Math.min(99, score + 5); // Increase confidence for an already successful match
       } else {
-        score = Math.min(89, score + 15); // Cannot cross the 90 Success threshold!
+        score = Math.min(89, score + 15);
       }
       matched.push('supplier_barcode_search');
     }
@@ -335,8 +364,9 @@ class BaseScraper {
 
       console.log(`[${this.supplierName}]      Result: ${evaluated.result_status.toUpperCase()} (Score: ${evaluated.validation_score}) - ${evaluated.validation_reason}`);
 
-      // Attempt-level robust logging
-      await this.logSearchResult({
+      // Attempt-level robust logging — capture the inserted log ID so we can
+      // backfill raw_product_id on the winning entry after the DB upsert (FIX 1).
+      const insertedLogId = await this.logSearchResult({
         scraper_run_id: this.runId,
         supplier_id: this.supplierRow.id,
         source_catalogue_key: product.barcode || product.product_name,
@@ -358,7 +388,8 @@ class BaseScraper {
       });
 
       if (evaluated.result_status === 'success') {
-        finalResult = evaluated;
+        // FIX 1: Carry the log ID forward so processProduct can backfill raw_product_id
+        finalResult = { ...evaluated, _logId: insertedLogId };
         break; // Stop searching! We found it deterministically.
       }
 
@@ -388,17 +419,40 @@ class BaseScraper {
 
         if (rawError) throw new Error(`raw_products upsert failed: ${rawError.message}`);
 
-        const { error: snapError } = await supabase.from('price_snapshots').insert({
-          canonical_product_id: null,
-          supplier_id: this.supplierRow.id,
-          case_price: finalResult.price,
-          unit_cost: null,
-          in_stock: finalResult.inStock,
-          promotion_flag: finalResult.promotionFlag || false,
-          snapshot_at: now,
-        });
+        // FIX 1 (Bug #3 & #5): Link snapshot to its raw_product row via raw_product_id FK.
+        // raw_product_id column must exist in price_snapshots — see migration SQL in
+        // supabase/migrations/00000000000010_add_raw_product_id_to_price_snapshots.sql
+        const { data: snapData, error: snapError } = await supabase
+          .from('price_snapshots')
+          .insert({
+            canonical_product_id: null,
+            supplier_id: this.supplierRow.id,
+            raw_product_id: rawProduct.id,    // FK to raw_products.id — no longer null
+            case_price: finalResult.price,
+            unit_cost: null,
+            in_stock: finalResult.inStock,
+            promotion_flag: finalResult.promotionFlag || false,
+            snapshot_at: now,
+          })
+          .select('id')
+          .single();
 
         if (snapError) throw new Error(`price_snapshots insert failed: ${snapError.message}`);
+
+        console.log(`[${this.supplierName}]   ✓ DB: raw_products.id=${rawProduct.id} → price_snapshots.id=${snapData.id} (raw_product_id linked)`);
+
+        // FIX 1 (Bug #3): Also backfill product_search_logs.raw_product_id for the
+        // winning success log entry, enabling full traceability: log → raw_product → snapshot.
+        // product_search_logs.raw_product_id column already exists in schema.
+        if (finalResult._logId) {
+          const { error: logUpdateError } = await supabase
+            .from('product_search_logs')
+            .update({ raw_product_id: rawProduct.id })
+            .eq('id', finalResult._logId);
+          if (logUpdateError) {
+            console.warn(`[${this.supplierName}]   ⚠ Could not update product_search_logs.raw_product_id:`, logUpdateError.message);
+          }
+        }
 
         if (finalResult.price !== null && finalResult.inStock) {
           this.stats.successfulPriceCount++;
