@@ -23,9 +23,18 @@ class BaseScraper {
     
     this.stats = {
       attemptedCount: 0,
-      successfulPriceCount: 0,
+      matchedCount: 0,
+      pricedCount: 0,
+      missingPriceCount: 0,
+      inStockCount: 0,
+      outOfStockCount: 0,
+      unknownStockCount: 0,
+      ambiguousCount: 0,
+      rejectedCount: 0,
+      notFoundCount: 0,
       missingPackCount: 0,
       errorCount: 0,
+      successfulPriceCount: 0, // Backward compatibility alias = pricedCount
     };
     
     // Default capabilities, to be overridden by subclasses
@@ -106,19 +115,50 @@ class BaseScraper {
   async finalizeRun(status, logMessage = '') {
     try {
       const durationSeconds = Math.floor((Date.now() - this.startTime) / 1000);
-      await supabase
+
+      // Full metrics payload
+      const updatePayload = {
+        status,
+        completed_at: new Date().toISOString(),
+        duration_seconds: durationSeconds,
+        attempted_count: this.stats.attemptedCount,
+        matched_count: this.stats.matchedCount,
+        priced_count: this.stats.pricedCount,
+        missing_price_count: this.stats.missingPriceCount,
+        in_stock_count: this.stats.inStockCount,
+        out_of_stock_count: this.stats.outOfStockCount,
+        unknown_stock_count: this.stats.unknownStockCount,
+        ambiguous_count: this.stats.ambiguousCount,
+        rejected_count: this.stats.rejectedCount,
+        not_found_count: this.stats.notFoundCount,
+        missing_pack_count: this.stats.missingPackCount,
+        error_count: this.stats.errorCount,
+        successful_price_count: this.stats.successfulPriceCount, // Backward compatibility
+        log: logMessage,
+      };
+
+      const { error } = await supabase
         .from('scraper_runs')
-        .update({
-          status,
-          completed_at: new Date().toISOString(),
-          duration_seconds: durationSeconds,
-          attempted_count: this.stats.attemptedCount,
-          successful_price_count: this.stats.successfulPriceCount,
-          missing_pack_count: this.stats.missingPackCount,
-          error_count: this.stats.errorCount,
-          log: logMessage,
-        })
+        .update(updatePayload)
         .eq('id', this.runId);
+
+      if (error && error.message.includes('column')) {
+        // Fallback for pre-migration schema: update only existing columns
+        console.warn(`[${this.supplierName}] New metrics columns not yet in DB schema. Updating existing columns only.`);
+        await supabase
+          .from('scraper_runs')
+          .update({
+            status,
+            completed_at: new Date().toISOString(),
+            duration_seconds: durationSeconds,
+            attempted_count: this.stats.attemptedCount,
+            successful_price_count: this.stats.successfulPriceCount,
+            missing_pack_count: this.stats.missingPackCount,
+            error_count: this.stats.errorCount,
+            log: logMessage,
+          })
+          .eq('id', this.runId);
+      }
     } catch (err) {
       console.error(`Failed to update scraper_runs for ${this.runId}:`, err.message);
     } finally {
@@ -246,7 +286,7 @@ class BaseScraper {
     const candWeight = ProductMetadataParser.extractWeight(candName);
     
     const csvPack = ProductMetadataParser.extractPackSize(csvName);
-    const candPack = ProductMetadataParser.extractPackSize(candName) || ProductMetadataParser.extractPackSize(candidate.rawPackInfo);
+    const candPack = ProductMetadataParser.extractPackSize(csvName) || ProductMetadataParser.extractPackSize(candidate.rawPackInfo);
 
     const conflicts = [];
     const matched = [];
@@ -282,39 +322,22 @@ class BaseScraper {
     } else if (ProductMetadataParser.normalizeText(csvName) === ProductMetadataParser.normalizeText(candName)) {
       score = 85; // Exact title match but missing explicit metadata = strong ambiguous
     } else if (ProductMetadataParser.titlesMatchAfterSuffixStrip(csvName, candName)) {
-      // FIX 2 follow-up: near-exact title match — titles are identical after stripping
-      // trailing pack-count suffixes (e.g. "54s", "24s") that suppliers append but
-      // source catalogues omit. Safety: if BOTH sides have a suffix with different
-      // values (e.g. source "24s" vs candidate "54s"), titlesMatchAfterSuffixStrip
-      // returns false and this branch is not entered.
-      // No conflicts reached this point (early return above) + titles match = success.
       score = 90;
     } else if (volOrWeightMatched || packMatched) {
       score = 60; // Weak ambiguous
     }
 
     // FIX 2: Revised barcode strategy boost
-    // A candidate barcode is only "verifiable" if it is a real EAN/UPC (≥ 8 digits).
-    // Parfetts internal product codes (e.g. "123190", 6 digits) are NOT verifiable EANs —
-    // they come from the href "/product/123190" and should never trigger a barcode boost.
     if (strategy === 'barcode' || strategy === 'normalized_barcode') {
       const candidateIsVerifiableEAN = candidateBarcode !== null &&
                                        candidateBarcode !== undefined &&
                                        candidateBarcode.length >= 8;
 
       if (candidateIsVerifiableEAN && csvBarcode === candidateBarcode) {
-        // Exact verifiable EAN match — already handled above, unreachable here
         score = 100;
       } else if (brandMatched && conflicts.length === 0 && candidateIsVerifiableEAN) {
-        // Brand matches AND candidate carries a real EAN → high confidence
         score = 90;
       } else if (!candidateIsVerifiableEAN) {
-        // FIX 2A: Candidate barcode is null or a non-EAN code (e.g. Parfetts product code).
-        // Never apply a boost — we cannot verify this candidate via barcode alone.
-        //
-        // FIX 2B: If the source product has a known brand and the candidate has NO brand,
-        // this is almost certainly a semantically unrelated fallback/promoted product.
-        // Reject it immediately rather than leaving it as an ambiguous match.
         if (csvBrand && !candBrand) {
           return {
             result_status: 'rejected',
@@ -323,10 +346,8 @@ class BaseScraper {
             conflicting_fields: 'brand',
           };
         }
-        // Source has no recognized brand OR candidate brand matches — no boost but also no rejection.
-        // Score stays at its metadata-only value; name-based strategies will refine further.
       } else if (score >= 90) {
-        score = Math.min(99, score + 5); // Increase confidence for an already successful match
+        score = Math.min(99, score + 5);
       } else {
         score = Math.min(89, score + 15);
       }
@@ -370,6 +391,7 @@ class BaseScraper {
 
     let finalResult = null;
     let attemptNumber = 1;
+    let bestNonSuccessEvaluated = null;
 
     console.log(`\n[${this.supplierName}] Processing: ${product.product_name} (${product.barcode})`);
 
@@ -400,8 +422,16 @@ class BaseScraper {
 
       console.log(`[${this.supplierName}]      Result: ${evaluated.result_status.toUpperCase()} (Score: ${evaluated.validation_score}) - ${evaluated.validation_reason}`);
 
-      // Attempt-level robust logging — capture the inserted log ID so we can
-      // backfill raw_product_id on the winning entry after the DB upsert (FIX 1).
+      // Track non-success attempts to classify final un-matched outcome (ambiguous > rejected > not_found)
+      if (evaluated.result_status !== 'success') {
+        if (!bestNonSuccessEvaluated ||
+            (evaluated.result_status === 'ambiguous' && bestNonSuccessEvaluated.result_status !== 'ambiguous') ||
+            (evaluated.result_status === 'rejected' && bestNonSuccessEvaluated.result_status === 'not_found')) {
+          bestNonSuccessEvaluated = evaluated;
+        }
+      }
+
+      // Attempt-level robust logging
       const insertedLogId = await this.logSearchResult({
         scraper_run_id: this.runId,
         supplier_id: this.supplierRow.id,
@@ -424,7 +454,6 @@ class BaseScraper {
       });
 
       if (evaluated.result_status === 'success') {
-        // FIX 1: Carry the log ID forward so processProduct can backfill raw_product_id
         finalResult = { ...evaluated, _logId: insertedLogId };
         break; // Stop searching! We found it deterministically.
       }
@@ -436,7 +465,6 @@ class BaseScraper {
     if (finalResult) {
       try {
         const rawTitle = finalResult.rawTitle || product.product_name;
-        // FIX 3: Final sanitization layer — strip embedded prices, VAT text, or invalid UI strings
         const rawPackInfo = ProductMetadataParser.sanitizePackInfo(finalResult.rawPackInfo);
 
         const { data: rawProduct, error: rawError } = await supabase
@@ -456,15 +484,12 @@ class BaseScraper {
 
         if (rawError) throw new Error(`raw_products upsert failed: ${rawError.message}`);
 
-        // FIX 1 (Bug #3 & #5): Link snapshot to its raw_product row via raw_product_id FK.
-        // raw_product_id column must exist in price_snapshots — see migration SQL in
-        // supabase/migrations/00000000000010_add_raw_product_id_to_price_snapshots.sql
         const { data: snapData, error: snapError } = await supabase
           .from('price_snapshots')
           .insert({
             canonical_product_id: null,
             supplier_id: this.supplierRow.id,
-            raw_product_id: rawProduct.id,    // FK to raw_products.id — no longer null
+            raw_product_id: rawProduct.id,
             case_price: finalResult.price,
             unit_cost: null,
             in_stock: finalResult.inStock,
@@ -478,9 +503,6 @@ class BaseScraper {
 
         console.log(`[${this.supplierName}]   ✓ DB: raw_products.id=${rawProduct.id} → price_snapshots.id=${snapData.id} (raw_product_id linked)`);
 
-        // FIX 1 (Bug #3): Also backfill product_search_logs.raw_product_id for the
-        // winning success log entry, enabling full traceability: log → raw_product → snapshot.
-        // product_search_logs.raw_product_id column already exists in schema.
         if (finalResult._logId) {
           const { error: logUpdateError } = await supabase
             .from('product_search_logs')
@@ -491,9 +513,24 @@ class BaseScraper {
           }
         }
 
-        if (finalResult.price !== null && finalResult.inStock) {
-          this.stats.successfulPriceCount++;
+        // Product-level metrics tracking for SUCCESS match
+        this.stats.matchedCount++;
+
+        if (finalResult.price !== null && finalResult.price > 0) {
+          this.stats.pricedCount++;
+          this.stats.successfulPriceCount++; // Backward compatibility
+        } else {
+          this.stats.missingPriceCount++;
         }
+
+        if (finalResult.inStock === true) {
+          this.stats.inStockCount++;
+        } else if (finalResult.inStock === false) {
+          this.stats.outOfStockCount++;
+        } else {
+          this.stats.unknownStockCount++;
+        }
+
         if (!rawPackInfo) {
           this.stats.missingPackCount++;
         }
@@ -502,9 +539,15 @@ class BaseScraper {
         console.error(`[${this.supplierName}] ✗ Final DB Write Error:`, err.message);
       }
     } else {
+      // Product-level metrics tracking for UNMATCHED product
+      if (bestNonSuccessEvaluated?.result_status === 'ambiguous') {
+        this.stats.ambiguousCount++;
+      } else if (bestNonSuccessEvaluated?.result_status === 'rejected') {
+        this.stats.rejectedCount++;
+      } else {
+        this.stats.notFoundCount++;
+      }
       console.log(`[${this.supplierName}] ✗ Product completely not found after all attempts.`);
-      // Optionally, you could still upsert the missing state to raw_products/snapshots 
-      // if tracking missing items in the current schema is required.
     }
   }
 
