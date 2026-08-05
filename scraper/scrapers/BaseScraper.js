@@ -285,10 +285,38 @@ class BaseScraper {
       score = 60; // Weak ambiguous
     }
 
-    // Barcode strategy boost
+    // FIX 2: Revised barcode strategy boost
+    // A candidate barcode is only "verifiable" if it is a real EAN/UPC (≥ 8 digits).
+    // Parfetts internal product codes (e.g. "123190", 6 digits) are NOT verifiable EANs —
+    // they come from the href "/product/123190" and should never trigger a barcode boost.
     if (strategy === 'barcode' || strategy === 'normalized_barcode') {
-      if (brandMatched && conflicts.length === 0) {
-        score = 90; // Direct barcode search match with matching brand and zero conflicts = Success!
+      const candidateIsVerifiableEAN = candidateBarcode !== null &&
+                                       candidateBarcode !== undefined &&
+                                       candidateBarcode.length >= 8;
+
+      if (candidateIsVerifiableEAN && csvBarcode === candidateBarcode) {
+        // Exact verifiable EAN match — already handled above, unreachable here
+        score = 100;
+      } else if (brandMatched && conflicts.length === 0 && candidateIsVerifiableEAN) {
+        // Brand matches AND candidate carries a real EAN → high confidence
+        score = 90;
+      } else if (!candidateIsVerifiableEAN) {
+        // FIX 2A: Candidate barcode is null or a non-EAN code (e.g. Parfetts product code).
+        // Never apply a boost — we cannot verify this candidate via barcode alone.
+        //
+        // FIX 2B: If the source product has a known brand and the candidate has NO brand,
+        // this is almost certainly a semantically unrelated fallback/promoted product.
+        // Reject it immediately rather than leaving it as an ambiguous match.
+        if (csvBrand && !candBrand) {
+          return {
+            result_status: 'rejected',
+            validation_score: 0,
+            validation_reason: `Barcode search returned unverifiable candidate (barcode "${candidateBarcode}", ${candidateBarcode ? candidateBarcode.length : 0} digits). Source brand "${csvBrand}" has no match in candidate title — likely an unrelated fallback or promoted product on a no-results page.`,
+            conflicting_fields: 'brand',
+          };
+        }
+        // Source has no recognized brand OR candidate brand matches — no boost but also no rejection.
+        // Score stays at its metadata-only value; name-based strategies will refine further.
       } else if (score >= 90) {
         score = Math.min(99, score + 5); // Increase confidence for an already successful match
       } else {
