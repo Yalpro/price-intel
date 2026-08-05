@@ -55,6 +55,48 @@ class ProductMetadataParser {
   }
 
   /**
+   * Sanitizes raw_pack_info string by stripping embedded price notations
+   * and VAT text, while preserving valid pack descriptors (e.g., "1 x 12", "12 x 500ml", "Case of 24").
+   *
+   * Returns null if the resulting text does not contain a valid pack or volume pattern,
+   * or if the input consists solely of prices or UI labels.
+   */
+  static sanitizePackInfo(text) {
+    if (!text || typeof text !== 'string') return null;
+    let s = text.trim();
+    if (!s) return null;
+
+    // 1. Remove parenthesized price/VAT expressions e.g. (£5.69), (excl. VAT £12.50), (£5.69 incl VAT)
+    s = s.replace(/\s*\([^)]*£[^)]*\)/gi, '');
+    s = s.replace(/\s*\([^)]*\b(?:excl|incl|inc|ex)\.?:?\s*vat\b[^)]*\)/gi, '');
+
+    // 2. Remove standalone VAT phrases e.g. "incl VAT", "excl VAT", "ex VAT", "inc. VAT"
+    s = s.replace(/\s*\(?\b(?:excl|incl|inc|ex)\.?:?\s*vat\b\)?/gi, '');
+
+    // 3. Remove standalone price notations e.g. £5.69, £14.99, £5
+    s = s.replace(/£\s?\d+(?:\.\d{1,2})?/g, '');
+
+    // Clean stray spaces/punctuation
+    s = s.replace(/[,\-_()]/g, ' ').replace(/\s{2,}/g, ' ').trim();
+
+    if (!s) return null;
+
+    // 4. Blacklist obvious non-pack UI terms
+    const lower = s.toLowerCase();
+    const blacklisted = ['in stock', 'out of stock', 'add to trolley', 'add to basket', 'promo', 'offer', 'featured', 'go local'];
+    if (blacklisted.includes(lower)) return null;
+
+    // 5. Must contain valid pack/volume/weight pattern or structure
+    const validPackPattern = /\b(\d+\s*(?:x|\*)\s*[\d.]+(?:\s*(?:ml|l|g|kg|cl|oz|pt|pint))?|\d+\s*(?:ml|l|g|kg|cl|oz|pt|pint)|\d+\s*(?:pack|pk|can|cans|bottle|bottles|box|boxes|sheets|wipes|sachets|units)|case\s+of\s+\d+|\d+\s*x\s*\d+)\b/i;
+
+    if (!validPackPattern.test(s)) {
+      return null;
+    }
+
+    return s;
+  }
+
+  /**
    * Extracts raw numeric pack quantity (e.g. "24x" -> 24)
    */
   static extractQuantity(text) {

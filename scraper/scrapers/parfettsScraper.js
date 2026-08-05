@@ -2,6 +2,7 @@ const { chromium } = require('playwright');
 const path = require('path');
 const fs = require('fs');
 const { BaseScraper } = require('./BaseScraper');
+const ProductMetadataParser = require('../utils/ProductMetadataParser');
 
 const STORAGE_STATE_PATH = path.join(__dirname, 'parfetts_state.json');
 
@@ -262,7 +263,7 @@ class ParfettsScraper extends BaseScraper {
 
         candidates.push({
           rawTitle,
-          rawPackInfo,
+          rawPackInfo: ProductMetadataParser.sanitizePackInfo(rawPackInfo),
           price,
           inStock,
           promotionFlag,
@@ -282,13 +283,14 @@ class ParfettsScraper extends BaseScraper {
             const title = titleEl ? titleEl.textContent.trim() : null;
             
             let packInfo = null;
-            const packEls = card.querySelectorAll('[class*="pack"], [class*="size"], .product-option, div');
+            // Refined DOM query: target elements specific to pack/size options, avoid generic card container divs
+            const packEls = card.querySelectorAll('[class*="pack"], [class*="size"], .product-option, p, span');
             for (const p of packEls) {
               const text = p.textContent.trim();
               if (text.includes('Pack Size')) {
                   const match = text.match(/Pack Size\s*(.+)/i);
                   if (match) packInfo = match[1].trim();
-              } else if (text.length > 0 && text.length < 30) {
+              } else if (text.length > 0 && text.length < 30 && /\d/.test(text)) {
                 packInfo = text;
               }
               if (packInfo) break;
@@ -328,7 +330,10 @@ class ParfettsScraper extends BaseScraper {
            }
         }
 
-        candidates.push(...items.filter(i => i.rawTitle));
+        candidates.push(...items.map(i => ({
+          ...i,
+          rawPackInfo: ProductMetadataParser.sanitizePackInfo(i.rawPackInfo)
+        })).filter(i => i.rawTitle));
       }
 
       return candidates;

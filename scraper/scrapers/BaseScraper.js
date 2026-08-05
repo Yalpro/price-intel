@@ -436,7 +436,8 @@ class BaseScraper {
     if (finalResult) {
       try {
         const rawTitle = finalResult.rawTitle || product.product_name;
-        const rawPackInfo = finalResult.rawPackInfo || null;
+        // FIX 3: Final sanitization layer — strip embedded prices, VAT text, or invalid UI strings
+        const rawPackInfo = ProductMetadataParser.sanitizePackInfo(finalResult.rawPackInfo);
 
         const { data: rawProduct, error: rawError } = await supabase
           .from('raw_products')
