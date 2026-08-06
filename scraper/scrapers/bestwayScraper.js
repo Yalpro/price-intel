@@ -261,12 +261,18 @@ class BestwayScraper extends BaseScraper {
     const rsp    = product.rsp ? parseFloat(product.rsp) : null;
     const minPOR = product.minPOR ? parseFloat(product.minPOR) : null;
 
-    // Pack info from productDimensions or title
-    const rawPackInfo = product.productDimensions || null;
+    // Pack info from productDimensions, packSize or altName
+    const rawPackInfo = product.productDimensions || product.packSize || product.altName || null;
 
-    // Pack count from title or productDimensions
-    const packCount = this.extractPackCount(rawTitle) ||
-                      this.extractPackCount(rawPackInfo);
+    // Pack count from retailSize (primary), caseSize, title, or rawPackInfo
+    const packCountFromRetail = product.retailSize ? parseInt(product.retailSize, 10) : null;
+    const packCountFromCase   = product.caseSize ? parseInt(product.caseSize, 10) : null;
+    
+    const packCount = (packCountFromRetail && packCountFromRetail >= 2 && packCountFromRetail <= 200)
+      ? packCountFromRetail
+      : (packCountFromCase && packCountFromCase >= 2 && packCountFromCase <= 200)
+        ? packCountFromCase
+        : (this.extractPackCount(rawTitle) || this.extractPackCount(rawPackInfo));
 
     // Derive case price (returns null if packCount is missing)
     const price = this.deriveCasePrice(rsp, minPOR, packCount);
@@ -279,7 +285,7 @@ class BestwayScraper extends BaseScraper {
     const promotionDesc = promotionFlag ? 'Price-Marked Pack' : null;
 
     // Brand from autosuggestBrand or title extraction
-    const brandName = product.autosuggestBrand || null;
+    const brandName = product.autosuggestBrand || (Array.isArray(product.brand) ? product.brand[0] : product.brand) || null;
 
     return {
       rawTitle,
@@ -311,6 +317,7 @@ class BestwayScraper extends BaseScraper {
         'doctype', 'title', 'productDimensions', 'productUrl', 'imageUrl',
         'rsp', 'uniqueId', 'minPOR', 'DesktopImageurl', 'hrefUrl',
         'altText', 'KeywordsTags', 'autosuggestBrand', 'autosuggest',
+        'retailSize', 'packSize', 'caseSize', 'altName', 'brand'
       ].join(',');
 
       const params = new URLSearchParams({
