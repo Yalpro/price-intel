@@ -114,9 +114,9 @@ class CatalogueImportService {
     for (let i = 0; i < parsedRows.length; i++) {
       const row = parsedRows[i];
       const rowNum = i + 1;
-      const rawBarcode = row.barcode || row.gtin || row.ean || '';
+      const rawBarcode = row.barcode || row.gtin || row.ean || row.Barcode || row.BARCODE || row.GTIN || row.EAN || '';
       const barcode = CatalogueImportService.normalizeBarcodeString(rawBarcode);
-      const name = String(row.product_name || row.name || row.title || '').trim();
+      const name = String(row.product_name || row.name || row.title || row['Product Name'] || row['PRODUCT NAME'] || row.PRODUCT_NAME || row.Title || '').trim();
 
       const rowErrors = [];
 

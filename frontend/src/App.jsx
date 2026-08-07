@@ -1,6 +1,8 @@
+import React, { useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { RequireAuth, RequireRole, RequireActiveRetailer } from './components/RouteGuards';
+import IntroSplash from './components/IntroSplash';
 
 // Layouts
 import AdminLayout from './layouts/AdminLayout';
@@ -13,7 +15,6 @@ import Home from './pages/public/Home';
 // Auth Pages
 import SharedLogin from './pages/auth/SharedLogin';
 import RetailerSignup from './pages/auth/RetailerSignup';
-import AdminLogin from './pages/admin/AdminLogin';
 
 // Admin Portal Pages
 import Dashboard from './pages/Dashboard';
@@ -27,14 +28,19 @@ import DailyDealsPreview from './pages/admin/DailyDealsPreview';
 import AdminSettings from './pages/admin/AdminSettings';
 
 // Retailer Portal Pages
-import RetailerDashboard from './pages/retailer/Dashboard';
-import ProductDetail from './pages/retailer/ProductDetail';
-import SavedProducts from './pages/retailer/SavedProducts';
+import DailyDeals from './pages/retailer/DailyDeals';
+import ProductSearch from './pages/retailer/ProductSearch';
+import ProductRequest from './pages/retailer/ProductRequest';
 import Account from './pages/retailer/Account';
 
 function App() {
+  const [splashCompleted, setSplashCompleted] = useState(false);
+
   return (
     <AuthProvider>
+      {!splashCompleted && (
+        <IntroSplash onComplete={() => setSplashCompleted(true)} />
+      )}
       <BrowserRouter>
         <Routes>
           {/* Public Routes */}
@@ -68,16 +74,16 @@ function App() {
 
           {/* Retailer Portal Shell */}
           <Route path="/app" element={
-            <RequireRole allowedRoles={['retailer']}>
+            <RequireRole allowedRoles={['retailer', 'admin', 'manager']}>
               <RequireActiveRetailer>
                 <RetailerLayout />
               </RequireActiveRetailer>
             </RequireRole>
           }>
-            <Route index element={<RetailerDashboard />} />
-            <Route path="product/:id" element={<ProductDetail />} />
-            <Route path="favourites" element={<SavedProducts />} />
-            <Route path="saved" element={<Navigate to="/app/favourites" replace />} />
+            <Route index element={<DailyDeals />} />
+            <Route path="deals" element={<DailyDeals />} />
+            <Route path="search" element={<ProductSearch />} />
+            <Route path="request" element={<ProductRequest />} />
             <Route path="account" element={<Account />} />
             <Route path="subscription" element={<Account />} />
           </Route>

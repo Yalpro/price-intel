@@ -1,6 +1,6 @@
 import React from 'react';
 
-const StatusBadge = ({ status, type = 'default' }) => {
+export const StatusBadge = ({ status, type = 'default' }) => {
   const getColors = () => {
     switch (type) {
       case 'success': return 'bg-green-100 text-success border border-green-200';

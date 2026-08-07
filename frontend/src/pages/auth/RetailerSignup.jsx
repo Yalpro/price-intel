@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
 import { TrendingUp, ArrowRight, AlertTriangle, Eye, EyeOff } from 'lucide-react';
+import AnapriceLogo from '../../components/AnapriceLogo';
 
 const RetailerSignup = () => {
   const [form, setForm] = useState({
@@ -112,15 +113,12 @@ const RetailerSignup = () => {
       <div className="w-full max-w-md">
 
         {/* Header */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-8 flex flex-col items-center">
           <Link to="/" className="inline-flex items-center gap-2 mb-4 group">
-            <div className="w-10 h-10 rounded-xl bg-accent flex items-center justify-center text-white shadow-sm group-hover:bg-teal-800 transition-colors">
-              <TrendingUp size={22} strokeWidth={2.2} />
-            </div>
-            <span className="font-sora font-bold text-2xl text-textPrimary tracking-tight">PriceIntel</span>
+            <AnapriceLogo size={40} />
           </Link>
           <h1 className="font-sora font-bold text-2xl text-textPrimary tracking-tight">
-            Start your 14-day free trial
+            Create your free Anaprice retailer account
           </h1>
           <p className="text-textSecondary text-sm mt-1.5">
             Instant access to wholesale price intelligence across top UK suppliers.

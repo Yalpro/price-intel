@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { EmptyState, Badge, Button } from '../components/UIComponents';
+import { EmptyState, StatusBadge } from '../components/UIComponents';
 import { BookOpen, Upload, CheckCircle2, AlertTriangle, RefreshCw, XCircle, ArrowLeftRight, Download, Eye, FileText } from 'lucide-react';
 
 const SKUCatalogue = () => {
@@ -119,9 +119,9 @@ const SKUCatalogue = () => {
           <h2 className="text-xl font-sora font-semibold text-textPrimary">Top 1,000 SKU Catalogue Management</h2>
           <p className="text-sm text-textSecondary">Database-driven catalogue versioning, validation, activation, and rollback workflow</p>
         </div>
-        <Button onClick={() => setShowUploadModal(true)} className="flex items-center gap-2 bg-accent text-white px-4 py-2 rounded-lg font-medium">
+        <button onClick={() => setShowUploadModal(true)} className="flex items-center gap-2 bg-accent text-white px-4 py-2 rounded-lg font-medium">
           <Upload size={18} /> Upload Monthly CSV
-        </Button>
+        </button>
       </div>
 
       {/* Feedback Banner */}
@@ -198,14 +198,14 @@ const SKUCatalogue = () => {
                         </button>
                       )}
                       {!v.is_active && v.status === 'ready_for_review' && (
-                        <Button onClick={() => { setSelectedVersion(v); setShowActivateModal(true); }} className="text-xs bg-emerald-600 text-white px-3 py-1 rounded">
+                        <button onClick={() => { setSelectedVersion(v); setShowActivateModal(true); }} className="text-xs bg-emerald-600 text-white px-3 py-1 rounded">
                           Activate
-                        </Button>
+                        </button>
                       )}
                       {!v.is_active && v.status === 'archived' && (
-                        <Button onClick={() => { setSelectedVersion(v); handleActivate(v.id, true); }} className="text-xs bg-blue-600 text-white px-3 py-1 rounded">
+                        <button onClick={() => { setSelectedVersion(v); handleActivate(v.id, true); }} className="text-xs bg-blue-600 text-white px-3 py-1 rounded">
                           Rollback To
-                        </Button>
+                        </button>
                       )}
                     </td>
                   </tr>
@@ -231,10 +231,10 @@ const SKUCatalogue = () => {
               <p>This will atomically archive the current active catalogue and switch future daily scraper runs to this new database version.</p>
             </div>
             <div className="flex justify-end gap-3 pt-2">
-              <Button onClick={() => setShowActivateModal(false)} className="px-4 py-2 border border-border rounded-lg text-sm">Cancel</Button>
-              <Button onClick={() => handleActivate(selectedVersion.id, false)} disabled={actionProcessing} className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium">
+              <button onClick={() => setShowActivateModal(false)} className="px-4 py-2 border border-border rounded-lg text-sm">Cancel</button>
+              <button onClick={() => handleActivate(selectedVersion.id, false)} disabled={actionProcessing} className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium">
                 {actionProcessing ? 'Activating...' : 'Confirm Activation'}
-              </Button>
+              </button>
             </div>
           </div>
         </div>

@@ -13,18 +13,20 @@ export default defineConfig({
         enabled: true
       },
       manifest: {
-        name: 'Wholesaler Price Comparison',
-        short_name: 'PriceComp',
-        description: 'Internal tool for comparing wholesale prices',
-        theme_color: '#ffffff',
+        name: 'Anaprice — Wholesale Price Intelligence',
+        short_name: 'Anaprice',
+        description: 'Compare wholesale prices and find better buying opportunities for independent UK retailers.',
+        theme_color: '#0A0E0C',
+        background_color: '#0A0E0C',
+        display: 'standalone',
         icons: [
           {
-            src: 'https://placehold.co/192x192.png',
+            src: '/brand/anaprice-logo.png',
             sizes: '192x192',
             type: 'image/png'
           },
           {
-            src: 'https://placehold.co/512x512.png',
+            src: '/brand/anaprice-logo.png',
             sizes: '512x512',
             type: 'image/png'
           }

@@ -53,7 +53,7 @@ const Subscription = () => {
             <p className="text-sm text-textSecondary">
               Contact us to {status === 'pending' ? 'activate your access' : 'reactivate price intelligence access'}.
             </p>
-            <a href="mailto:support@wholesalepriceintelligence.com" className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-accent hover:underline">
+            <a href="mailto:support@anaprice.co.uk" className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-accent hover:underline">
               Contact Support →
             </a>
           </div>

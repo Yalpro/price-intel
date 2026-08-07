@@ -8,7 +8,11 @@
   --color-textPrimary: var(--text-primary);
   --color-textSecondary: var(--text-secondary);
   --color-accent: var(--accent);
+  --color-accentHover: var(--accent-hover);
   --color-accentSoft: var(--accent-soft);
+  --color-accentMint: var(--accent-mint);
+  --color-savingBg: var(--saving-bg);
+  --color-savingText: var(--saving-text);
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-danger: var(--danger);
@@ -18,32 +22,34 @@
   --font-inter: 'Inter', sans-serif;
   --font-mono: '"JetBrains Mono"', monospace;
 
-  --shadow-surface-raised: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-surface-raised: 0 4px 20px -2px rgba(0, 0, 0, 0.5);
 }
 
 @layer base {
   :root {
-    --bg: #F7F8FA;
-    --bg-public: #FFFFFF;
-    --bg-section-alt: #F7F8FA;
-    --surface: #FFFFFF;
-    --border: #E4E7EC;
-    --text-primary: #0F172A;
-    --text-secondary: #64748B;
-    --accent: #0F766E;
-    --accent-soft: #CCFBF1;
-    --success: #16A34A;
-    --warning: #D97706;
-    --danger: #DC2626;
-    --info: #4F46E5;
+    --bg: #0A0E0C;
+    --surface: #121714;
+    --border: #1E2621;
+    --text-primary: #F5F5F0;
+    --text-secondary: #A8ACA8;
+    --accent: #10B981;
+    --accent-hover: #047857;
+    --accent-soft: rgba(167, 243, 208, 0.12);
+    --accent-mint: #A7F3D0;
+    --saving-bg: #064E3B;
+    --saving-text: #A7F3D0;
+    --success: #22C55E;
+    --warning: #FBBF24;
+    --danger: #F87171;
+    --info: #3B82F6;
   }
 
   body {
-    @apply bg-background text-textPrimary font-inter antialiased;
+    @apply bg-background text-textPrimary font-inter antialiased min-h-screen selection:bg-accent/30 selection:text-accentMint;
   }
-  
+
   h1, h2, h3, h4, h5, h6 {
-    @apply font-sora tracking-tight;
+    @apply font-sora tracking-tight text-textPrimary;
   }
 }
 
@@ -54,7 +60,7 @@
 @keyframes fadeInUp {
   from {
     opacity: 0;
-    transform: translateY(12px);
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
@@ -63,6 +69,21 @@
 }
 
 .animate-fade-in-up {
-  animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: fadeInUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+/* Custom scrollbars for dark mode tables */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0A0E0C;
+}
+::-webkit-scrollbar-thumb {
+  background: #1E2621;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #10B981;
+}

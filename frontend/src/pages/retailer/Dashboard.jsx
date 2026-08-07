@@ -67,7 +67,7 @@ const Dashboard = () => {
             </div>
             <div>
               <p className="text-sm font-semibold text-success">14-Day Trial Active</p>
-              <p className="text-xs text-slate-600">Welcome to PriceIntel! You can now search Booker, Parfetts, and Costco prices.</p>
+              <p className="text-xs text-textSecondary">Welcome to Anaprice! Compare Booker, Parfetts, Bestway, and Costco prices in real-time.</p>
             </div>
           </div>
         </div>
