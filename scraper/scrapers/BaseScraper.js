@@ -6,7 +6,7 @@ const ProductMetadataParser = require('../utils/ProductMetadataParser');
 const GlobalMetadataLayer = require('../services/GlobalMetadataLayer');
 
 const supabase = createClient(
-  process.env.VITE_SUPABASE_URL,
+  process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
@@ -22,7 +22,7 @@ class BaseScraper {
     this.startTime = null;
     this.supplierRow = null;
     this.metadataLayer = new GlobalMetadataLayer();
-    
+
     this.stats = {
       attemptedCount: 0,
       matchedCount: 0,
@@ -38,7 +38,7 @@ class BaseScraper {
       errorCount: 0,
       successfulPriceCount: 0, // Backward compatibility alias = pricedCount
     };
-    
+
     // Default capabilities, to be overridden by subclasses
     this.capabilities = {
       supportsBarcodeSearch: true,
@@ -109,7 +109,7 @@ class BaseScraper {
       runLocks[this.supplierName] = false;
       throw new Error(`Failed to initialize run in DB: ${runError.message}`);
     }
-    
+
     this.runId = runData.id;
     this.startTime = Date.now();
   }
@@ -165,7 +165,7 @@ class BaseScraper {
       console.error(`Failed to update scraper_runs for ${this.runId}:`, err.message);
     } finally {
       runLocks[this.supplierName] = false;
-      await this.close().catch(() => {});
+      await this.close().catch(() => { });
     }
   }
 
@@ -221,13 +221,13 @@ class BaseScraper {
       if (process.env.SCRAPER_DEBUG === 'true') {
         const screenshotPath = require('path').join(__dirname, '..', 'debug_output', `${this.supplierName}_${Date.now()}.png`);
         if (!fs.existsSync(require('path').dirname(screenshotPath))) {
-            fs.mkdirSync(require('path').dirname(screenshotPath), { recursive: true });
+          fs.mkdirSync(require('path').dirname(screenshotPath), { recursive: true });
         }
         await pg.screenshot({ path: screenshotPath, fullPage: true });
         evidence.screenshotPath = screenshotPath;
       }
     } catch (e) {
-        console.error(`[${this.supplierName}] Error capturing debug evidence:`, e.message);
+      console.error(`[${this.supplierName}] Error capturing debug evidence:`, e.message);
     }
 
     console.warn(`[${this.supplierName}] DEBUG EVIDENCE:`, JSON.stringify(evidence, null, 2));
@@ -246,7 +246,7 @@ class BaseScraper {
 
     for (const candidate of candidates) {
       const evaluation = this.evaluateCandidate(csvProduct, candidate, strategy);
-      
+
       if (evaluation.validation_score > highestScore) {
         highestScore = evaluation.validation_score;
         bestCandidate = { ...candidate, ...evaluation };
@@ -267,21 +267,21 @@ class BaseScraper {
     }
 
     if (isTie) {
-        const exactMatch = topCandidates.find(c =>
-          c.rawTitle && (
-            c.rawTitle.toLowerCase() === csvProduct.product_name.toLowerCase() ||
-            ProductMetadataParser.titlesMatchAfterSuffixStrip(csvProduct.product_name, c.rawTitle) ||
-            ProductMetadataParser.normalizeCoreTitle(csvProduct.product_name) === ProductMetadataParser.normalizeCoreTitle(c.rawTitle)
-          )
-        );
-        if (exactMatch) {
-            return exactMatch;
-        }
-        return { 
-            result_status: 'ambiguous', 
-            validation_score: highestScore, 
-            validation_reason: 'Multiple candidates tied with the highest valid score.' 
-        };
+      const exactMatch = topCandidates.find(c =>
+        c.rawTitle && (
+          c.rawTitle.toLowerCase() === csvProduct.product_name.toLowerCase() ||
+          ProductMetadataParser.titlesMatchAfterSuffixStrip(csvProduct.product_name, c.rawTitle) ||
+          ProductMetadataParser.normalizeCoreTitle(csvProduct.product_name) === ProductMetadataParser.normalizeCoreTitle(c.rawTitle)
+        )
+      );
+      if (exactMatch) {
+        return exactMatch;
+      }
+      return {
+        result_status: 'ambiguous',
+        validation_score: highestScore,
+        validation_reason: 'Multiple candidates tied with the highest valid score.'
+      };
     }
 
     return bestCandidate;
@@ -303,16 +303,16 @@ class BaseScraper {
     // 2. Metadata check
     const csvName = csvProduct.product_name;
     const candName = candidate.rawTitle || '';
-    
+
     const csvBrand = ProductMetadataParser.extractBrand(csvName);
     const candBrand = ProductMetadataParser.extractBrand(candName);
-    
+
     const csvVol = ProductMetadataParser.extractVolume(csvName);
     const candVol = ProductMetadataParser.extractVolume(candName);
-    
+
     const csvWeight = ProductMetadataParser.extractWeight(csvName);
     const candWeight = ProductMetadataParser.extractWeight(candName);
-    
+
     const csvPack = ProductMetadataParser.extractPackSize(csvName);
     const candPack = ProductMetadataParser.extractPackSize(candName) || ProductMetadataParser.extractPackSize(candidate.rawPackInfo);
 
@@ -372,8 +372,8 @@ class BaseScraper {
     // FIX 2: Revised barcode strategy boost
     if (strategy === 'barcode' || strategy === 'normalized_barcode') {
       const candidateIsVerifiableEAN = candidateBarcode !== null &&
-                                       candidateBarcode !== undefined &&
-                                       candidateBarcode.length >= 8;
+        candidateBarcode !== undefined &&
+        candidateBarcode.length >= 8;
 
       if (candidateIsVerifiableEAN && csvBarcode === candidateBarcode) {
         score = 100;
@@ -415,20 +415,20 @@ class BaseScraper {
     const product = await this.metadataLayer.enrichProduct(rawCsvProduct);
 
     const strategies = [];
-    
+
     if (this.capabilities.supportsBarcodeSearch) {
       if (product.barcode) strategies.push({ type: 'barcode', term: product.barcode });
-      
+
       const normBarcode = ProductMetadataParser.normalizeBarcode(product.barcode);
       if (normBarcode && normBarcode !== product.barcode) strategies.push({ type: 'normalized_barcode', term: normBarcode });
     }
-    
+
     if (this.capabilities.supportsNameSearch) {
       if (product.product_name) strategies.push({ type: 'exact_name', term: product.product_name });
-      
+
       const cleanName = ProductMetadataParser.cleanName(product.product_name);
       if (cleanName && cleanName !== product.product_name) strategies.push({ type: 'cleaned_name', term: cleanName });
-      
+
       const brandCore = ProductMetadataParser.extractBrand(product.product_name);
       if (brandCore && brandCore !== cleanName) strategies.push({ type: 'brand_core', term: brandCore });
     }
@@ -449,7 +449,7 @@ class BaseScraper {
       try {
         candidates = await this.executeSearch(page, strategy.term, strategy.type);
         if (!Array.isArray(candidates)) {
-           candidates = candidates ? [candidates] : [];
+          candidates = candidates ? [candidates] : [];
         }
       } catch (err) {
         errorMessage = err.message;
@@ -469,8 +469,8 @@ class BaseScraper {
       // Track non-success attempts to classify final un-matched outcome (ambiguous > rejected > not_found)
       if (evaluated.result_status !== 'success') {
         if (!bestNonSuccessEvaluated ||
-            (evaluated.result_status === 'ambiguous' && bestNonSuccessEvaluated.result_status !== 'ambiguous') ||
-            (evaluated.result_status === 'rejected' && bestNonSuccessEvaluated.result_status === 'not_found')) {
+          (evaluated.result_status === 'ambiguous' && bestNonSuccessEvaluated.result_status !== 'ambiguous') ||
+          (evaluated.result_status === 'rejected' && bestNonSuccessEvaluated.result_status === 'not_found')) {
           bestNonSuccessEvaluated = evaluated;
         }
       }
