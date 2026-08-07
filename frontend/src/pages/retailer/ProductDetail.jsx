@@ -20,7 +20,7 @@ const ProductDetail = () => {
     lastUpdated: 'Today at 06:00',
     suppliers: [
       { name: 'Parfetts', price: '10.89', unitPrice: '0.45', isCheapest: true, inStock: true, promotion: 'PROMO: Save £0.40 per case' },
-      { name: 'Dhamecha', price: '11.20', unitPrice: '0.47', isCheapest: false, inStock: true, promotion: null },
+      { name: 'Costco', price: '11.20', unitPrice: '0.47', isCheapest: false, inStock: true, promotion: null },
       { name: 'Booker', price: '11.49', unitPrice: '0.48', isCheapest: false, inStock: true, promotion: null },
     ],
   };

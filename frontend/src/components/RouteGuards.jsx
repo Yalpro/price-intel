@@ -78,7 +78,7 @@ const TrialExpiredScreen = () => (
       </h1>
 
       <p className="text-sm text-textSecondary leading-relaxed mb-6">
-        To continue comparing daily Booker, Parfetts, and Dhamecha wholesale prices, please subscribe to our Retailer Pro plan.
+        To continue comparing daily Booker, Parfetts, and Costco wholesale prices, please subscribe to our Retailer Pro plan.
       </p>
 
       <div className="bg-slate-50 border border-border rounded-xl p-4 mb-6 text-left text-xs space-y-2">

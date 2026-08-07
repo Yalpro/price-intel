@@ -1,6 +1,7 @@
 const ParfettsScraper = require('../scrapers/parfettsScraper');
 const BookerScraper = require('../scrapers/bookerScraper');
-const DhamechaScraper = require('../scrapers/dhamechaScraper');
+const CostcoScraper = require('../scrapers/costcoScraper');
+const BestwayScraper = require('../scrapers/bestwayScraper');
 const { runLocks } = require('../scrapers/BaseScraper');
 const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config({ path: '../../.env' });
@@ -9,8 +10,17 @@ const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-// Temporary for regression testing
-const CSV_PATH = require('path').join(__dirname, '../test_regression.csv');
+const fs = require('fs');
+const path = require('path');
+
+// Resolve master product catalogue path across local & Docker container paths
+let CSV_PATH = path.join(__dirname, '../../top_1000_products.csv');
+if (!fs.existsSync(CSV_PATH)) {
+  const altPath = path.join(__dirname, '../top_1000_products.csv');
+  const dataPath = path.join(__dirname, '../data/top_1000_products.csv');
+  if (fs.existsSync(altPath)) CSV_PATH = altPath;
+  else if (fs.existsSync(dataPath)) CSV_PATH = dataPath;
+}
 
 class ScraperService {
   getScraperInstance(supplierName) {
@@ -20,8 +30,10 @@ class ScraperService {
         return new ParfettsScraper();
       case 'booker':
         return new BookerScraper();
-      case 'dhamecha':
-        return new DhamechaScraper();
+      case 'costco':
+        return new CostcoScraper();
+      case 'bestway':
+        return new BestwayScraper();
       default:
         throw new Error(`Scraper for supplier '${supplierName}' is not implemented.`);
     }

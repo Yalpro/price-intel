@@ -3,6 +3,7 @@ const csv = require('csv-parser');
 const { chromium } = require('playwright');
 const { createClient } = require('@supabase/supabase-js');
 const ProductMetadataParser = require('../utils/ProductMetadataParser');
+const GlobalMetadataLayer = require('../services/GlobalMetadataLayer');
 
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL,
@@ -20,6 +21,7 @@ class BaseScraper {
     this.runId = null;
     this.startTime = null;
     this.supplierRow = null;
+    this.metadataLayer = new GlobalMetadataLayer();
     
     this.stats = {
       attemptedCount: 0,
@@ -171,11 +173,23 @@ class BaseScraper {
     // FIX 1: Return the inserted log row ID so the caller can backfill raw_product_id
     // on the winning success log entry after the raw_products upsert completes.
     try {
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('product_search_logs')
         .insert(logData)
         .select('id')
         .single();
+      if (error && error.message.includes('schema cache')) {
+        const fallbackLog = { ...logData };
+        delete fallbackLog.selected_candidate_code;
+        delete fallbackLog.selected_candidate_url;
+        const res = await supabase
+          .from('product_search_logs')
+          .insert(fallbackLog)
+          .select('id')
+          .single();
+        data = res.data;
+        error = res.error;
+      }
       if (error) {
         console.error(`[${this.supplierName}] Failed to insert search log:`, error.message);
         return null;
@@ -394,9 +408,11 @@ class BaseScraper {
     };
   }
 
-  async processProduct(product, page) {
+  async processProduct(rawCsvProduct, page) {
     this.stats.attemptedCount++;
     const now = new Date().toISOString();
+
+    const product = await this.metadataLayer.enrichProduct(rawCsvProduct);
 
     const strategies = [];
     
@@ -500,7 +516,7 @@ class BaseScraper {
         const rawProductCode = finalResult.rawProductCode || finalResult.rawBarcode || null;
         const rawUrl = finalResult.rawUrl || null;
 
-        const { data: rawProduct, error: rawError } = await supabase
+        let { data: rawProduct, error: rawError } = await supabase
           .from('raw_products')
           .upsert(
             {
@@ -516,6 +532,25 @@ class BaseScraper {
           )
           .select()
           .single();
+
+        if (rawError && rawError.message.includes('schema cache')) {
+          const fallbackRes = await supabase
+            .from('raw_products')
+            .upsert(
+              {
+                supplier_id: this.supplierRow.id,
+                raw_title: rawTitle,
+                raw_barcode: product.barcode,
+                raw_pack_info: rawPackInfo,
+                scraped_at: now,
+              },
+              { onConflict: 'supplier_id,raw_barcode' }
+            )
+            .select()
+            .single();
+          rawProduct = fallbackRes.data;
+          rawError = fallbackRes.error;
+        }
 
         if (rawError) throw new Error(`raw_products upsert failed: ${rawError.message}`);
 
@@ -595,12 +630,21 @@ class BaseScraper {
     throw new Error('login must be implemented by subclass.');
   }
 
-  async run(csvPath) {
+  async loadProducts(input) {
+    if (Array.isArray(input)) {
+      return input;
+    }
+    const CatalogueService = require('../services/CatalogueService');
+    const cs = new CatalogueService();
+    return cs.loadActiveCatalogue(input);
+  }
+
+  async run(input = null) {
     try {
       await this.initRun();
       console.log(`\n=== Started ${this.supplierName} Scraper (Run ID: ${this.runId}) ===`);
 
-      const products = await this.loadProductsFromCsv(csvPath);
+      const products = await this.loadProducts(input);
       console.log(`Loaded ${products.length} products.`);
 
       const page = await this.login();

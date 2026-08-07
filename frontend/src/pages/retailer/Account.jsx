@@ -29,7 +29,7 @@ const Account = () => {
               </span>
             </div>
             <p className="text-xs text-textSecondary">
-              Your free trial gives you full access to Booker, Parfetts, and Dhamecha price scans.
+              Your free trial gives you full access to Booker, Parfetts, and Costco price scans.
             </p>
           </div>
 
@@ -56,7 +56,7 @@ const Account = () => {
 
           <div className="bg-slate-50 p-4 rounded-xl border border-border">
             <span className="text-textSecondary block mb-1">Connected Wholesalers</span>
-            <span className="font-semibold text-textPrimary">Booker, Parfetts, Dhamecha</span>
+            <span className="font-semibold text-textPrimary">Booker, Parfetts, Costco</span>
           </div>
         </div>
       </div>

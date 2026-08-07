@@ -2,8 +2,24 @@ const express = require('express');
 const router = express.Router();
 const scraperService = require('../services/scraperService');
 
+// Middleware to verify API secret header if SCRAPER_API_SECRET is configured or NODE_ENV=production
+const verifyApiSecret = (req, res, next) => {
+  const secret = process.env.SCRAPER_API_SECRET;
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  if (secret || isProduction) {
+    const authHeader = req.headers['x-api-secret'] || req.headers['authorization'];
+    const token = authHeader ? authHeader.replace(/^Bearer\s+/i, '').trim() : null;
+
+    if (!secret || !token || token !== secret) {
+      return res.status(401).json({ error: 'Unauthorized: Invalid or missing API secret header.' });
+    }
+  }
+  next();
+};
+
 // POST /api/scrapers/run
-router.post('/run', async (req, res) => {
+router.post('/run', verifyApiSecret, async (req, res) => {
   const { supplier } = req.body;
   if (!supplier) {
     return res.status(400).json({ error: "Missing 'supplier' in request body." });
@@ -21,7 +37,7 @@ router.post('/run', async (req, res) => {
 });
 
 // GET /api/scrapers/status
-router.get('/status', async (req, res) => {
+router.get('/status', verifyApiSecret, async (req, res) => {
   const { supplier } = req.query;
   if (!supplier) {
     return res.status(400).json({ error: "Missing 'supplier' query parameter." });

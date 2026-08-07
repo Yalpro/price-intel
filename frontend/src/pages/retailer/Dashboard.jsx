@@ -36,7 +36,7 @@ const Dashboard = () => {
       name: 'Cadbury Dairy Milk Bar 24 × 110g',
       barcode: '7622210984321',
       category: 'Confectionery',
-      cheapestSupplier: 'Dhamecha',
+      cheapestSupplier: 'Costco',
       cheapestPrice: '16.20',
       highestPrice: '17.10',
       savings: '0.90',
@@ -67,7 +67,7 @@ const Dashboard = () => {
             </div>
             <div>
               <p className="text-sm font-semibold text-success">14-Day Trial Active</p>
-              <p className="text-xs text-slate-600">Welcome to PriceIntel! You can now search Booker, Parfetts, and Dhamecha prices.</p>
+              <p className="text-xs text-slate-600">Welcome to PriceIntel! You can now search Booker, Parfetts, and Costco prices.</p>
             </div>
           </div>
         </div>
@@ -82,7 +82,7 @@ const Dashboard = () => {
           Compare Wholesale Prices Across UK Wholesalers
         </h1>
         <p className="text-sm text-textSecondary max-w-xl mx-auto mb-6">
-          Find who has the cheapest stock today between Booker, Parfetts, and Dhamecha.
+          Find who has the cheapest stock today between Booker, Parfetts, and Costco.
         </p>
 
         {/* Big Search Bar */}

@@ -1,9 +1,63 @@
+# Dependencies
 node_modules/
 dist/
 build/
+
+# Environment variables & Secrets
 .env
+.env.local
+.env.production
+.env.development
 .env.*
 !.env.example
+
+# OS & Temp files
 .DS_Store
 *.log
 supabase/.temp/
+
+# Browser sessions, auth cookies & state files
+scraper/sessions/*
+!scraper/sessions/.gitkeep
+scraper/scrapers/*_state.json
+scraper/*_state*.json
+scraper/*_cookies.json
+scraper/*_session*.json
+scraper/booker_inspect_api_requests.json
+scraper/bestway_unbxd_calls.json
+
+# Screenshots, Debug HTML & Output dumps
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.html
+*.dump
+scraper/*.html
+scraper/*.png
+scraper/test_*.csv
+scraper/bestway_test_50.csv
+scraper/*_report.json
+
+# Playwright & Browser Artifacts
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
+
+
+# Environment secrets
+.env
+.env.*
+!.env.example
+
+# Scraper browser sessions / authentication state
+scraper/sessions/
+
+# Scraper inspection/debug artifacts
+scraper/scrapers/*_state_inspect.json
+
+# Local data / processing files
+June.csv
+process_june_sales.cjs

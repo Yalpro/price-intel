@@ -43,7 +43,7 @@ const SavedProducts = () => {
           </h2>
 
           <p className="text-sm text-textSecondary max-w-md mx-auto mb-8">
-            Staring items adds them to your personal shortlist so you can instantly check Booker, Parfetts, and Dhamecha prices before ordering.
+            Staring items adds them to your personal shortlist so you can instantly check Booker, Parfetts, and Costco prices before ordering.
           </p>
 
           <Link
