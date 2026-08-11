@@ -8,6 +8,7 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-api-secret');
+  res.setHeader('Content-Type', 'application/json');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -15,33 +16,6 @@ export default async function handler(req, res) {
 
   const reqUrl = req.url || '';
 
-  // 1. Try forwarding to DigitalOcean backend server
-  try {
-    const targetUrl = `http://209.97.176.223:4000${reqUrl}`;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4000);
-
-    const doRes = await fetch(targetUrl, {
-      method: req.method,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(req.headers['x-api-secret'] ? { 'x-api-secret': req.headers['x-api-secret'] } : {})
-      },
-      body: ['POST', 'PUT', 'PATCH'].includes(req.method) ? JSON.stringify(req.body) : undefined,
-      signal: controller.signal
-    });
-
-    clearTimeout(timeoutId);
-
-    if (doRes.ok) {
-      const data = await doRes.json();
-      return res.status(doRes.status).json(data);
-    }
-  } catch (err) {
-    console.warn('[Vercel API Handler] DigitalOcean proxy attempt failed or timed out, executing Supabase fallback:', err.message);
-  }
-
-  // 2. Direct Supabase Fallback using Service Role Key
   try {
     const { data: activeVer } = await supabase
       .from('catalogue_versions')
@@ -64,8 +38,22 @@ export default async function handler(req, res) {
       if (isBarcode) q = q.eq('barcode', query);
       else q = q.ilike('name', `%${query}%`);
 
-      const { data: items } = await q.limit(20);
-      const suggestions = (items || []).slice(0, 10).map(i => ({
+      const { data: items } = await q.limit(25);
+
+      const sorted = (items || []).sort((a, b) => {
+        const aBc = (a.barcode || '').toLowerCase();
+        const bBc = (b.barcode || '').toLowerCase();
+        if (aBc === query) return -1;
+        if (bBc === query) return 1;
+
+        const aStarts = (a.name || '').toLowerCase().startsWith(query);
+        const bStarts = (b.name || '').toLowerCase().startsWith(query);
+        if (aStarts && !bStarts) return -1;
+        if (!aStarts && bStarts) return 1;
+        return (a.name || '').localeCompare(b.name || '');
+      });
+
+      const suggestions = sorted.slice(0, 10).map(i => ({
         id: i.id,
         name: i.name,
         barcode: i.barcode,
@@ -204,8 +192,8 @@ export default async function handler(req, res) {
     }
 
     return res.status(404).json({ success: false, error: 'Endpoint not found' });
-  } catch (fallbackErr) {
-    console.error('[Vercel API Handler] Fallback error:', fallbackErr);
-    return res.status(500).json({ success: false, error: fallbackErr.message });
+  } catch (err) {
+    console.error('[Vercel Serverless Handler] Error:', err);
+    return res.status(500).json({ success: false, error: err.message });
   }
 }
