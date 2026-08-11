@@ -3,7 +3,7 @@ import DataTable from '../components/DataTable';
 import StatusBadge, { LiveStatusPulse, EmptyState } from '../components/UIComponents';
 import { Activity, Play, RefreshCw, AlertTriangle, CheckCircle2, Clock, Loader2, Square } from 'lucide-react';
 import { supabase } from '../supabaseClient';
-import { API_BASE_URL } from '../config/apiConfig';
+import { API_BASE_URL, fetchWithAuth } from '../config/apiConfig';
 
 const ScraperMonitoring = () => {
   const [runs, setRuns] = useState([]);
@@ -39,7 +39,7 @@ const ScraperMonitoring = () => {
 
       // Verify genuinely running in-memory scrapers via backend API
       try {
-        const activeRes = await fetch(`${API_BASE_URL}/api/scrapers/active`);
+        const activeRes = await fetchWithAuth('/api/scrapers/active');
         if (activeRes.ok) {
           const activeData = await activeRes.json();
           if (activeData.activeSuppliers && suppRes.data) {
@@ -74,11 +74,8 @@ const ScraperMonitoring = () => {
     setFeedbackMsg(null);
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/scrapers/run`, {
+      const res = await fetchWithAuth('/api/scrapers/run', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify({
           supplier: supplier.name
         })
@@ -122,7 +119,7 @@ const ScraperMonitoring = () => {
     setFeedbackMsg(null);
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/scrapers/stop`, {
+      const res = await fetchWithAuth('/api/scrapers/stop', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

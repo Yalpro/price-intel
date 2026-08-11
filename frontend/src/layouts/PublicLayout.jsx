@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Outlet, Link } from 'react-router-dom';
+import { Outlet, Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { LogOut, User, LayoutDashboard, Store } from 'lucide-react';
 import AnapriceLogo from '../components/AnapriceLogo';
 
 const PublicLayout = () => {
   const [isScrolled, setIsScrolled] = useState(false);
+  const { session, profile, loading, logout } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -16,6 +20,15 @@ const PublicLayout = () => {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/');
+  };
+
+  const isAdmin = profile && ['admin', 'manager'].includes(profile.role);
+  const isRetailer = profile && profile.role === 'retailer';
+  const dashboardPath = isAdmin ? '/admin' : '/app';
 
   return (
     <div className="min-h-screen bg-background flex flex-col font-inter text-textPrimary antialiased selection:bg-accent/30 selection:text-accentMint">
@@ -42,27 +55,51 @@ const PublicLayout = () => {
               </a>
             </nav>
 
-            {/* Auth Actions */}
+            {/* Auth Actions Header */}
             <div className="flex items-center space-x-4">
-              <Link
-                to="/login"
-                className="text-sm font-medium text-textSecondary hover:text-textPrimary transition-colors"
-              >
-                Log in
-              </Link>
-              <Link
-                to="/signup"
-                className="inline-flex items-center justify-center px-4.5 py-2.5 rounded-lg text-sm font-semibold text-white bg-accent hover:bg-accentHover transition-colors shadow-sm cursor-pointer"
-              >
-                Get started
-              </Link>
+              {loading ? (
+                <div className="w-24 h-8 bg-surface animate-pulse rounded-lg border border-border" />
+              ) : session && profile ? (
+                <div className="flex items-center gap-3">
+                  <Link
+                    to={dashboardPath}
+                    className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-accentSoft text-accentMint border border-emerald-800/60 hover:bg-savingBg transition-colors"
+                  >
+                    {isAdmin ? <LayoutDashboard size={14} /> : <Store size={14} />}
+                    <span>{isAdmin ? 'Admin Dashboard' : 'Retailer Portal'}</span>
+                  </Link>
+
+                  <button
+                    onClick={handleLogout}
+                    className="p-2 text-textSecondary hover:text-danger hover:bg-surface border border-transparent hover:border-border rounded-xl transition-colors cursor-pointer"
+                    title="Log out"
+                  >
+                    <LogOut size={16} />
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <Link
+                    to="/login"
+                    className="text-sm font-medium text-textSecondary hover:text-textPrimary transition-colors"
+                  >
+                    Log in
+                  </Link>
+                  <Link
+                    to="/signup"
+                    className="inline-flex items-center justify-center px-4.5 py-2.5 rounded-lg text-sm font-semibold text-white bg-accent hover:bg-accentHover transition-colors shadow-sm cursor-pointer"
+                  >
+                    Get started
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="flex-grow">
+      <main className="grow">
         <Outlet />
       </main>
 
@@ -73,8 +110,14 @@ const PublicLayout = () => {
             <AnapriceLogo size={32} />
 
             <div className="flex flex-wrap justify-center gap-x-8 gap-y-2 text-sm text-textSecondary">
-              <Link to="/login" className="hover:text-textPrimary transition-colors">Login</Link>
-              <Link to="/signup" className="hover:text-textPrimary transition-colors">Get Started</Link>
+              {session && profile ? (
+                <Link to={dashboardPath} className="hover:text-textPrimary transition-colors">Dashboard</Link>
+              ) : (
+                <>
+                  <Link to="/login" className="hover:text-textPrimary transition-colors">Login</Link>
+                  <Link to="/signup" className="hover:text-textPrimary transition-colors">Get Started</Link>
+                </>
+              )}
               <a href="#pricing" className="hover:text-textPrimary transition-colors">Pilot Access</a>
               <a href="#" className="hover:text-textPrimary transition-colors">Privacy Policy</a>
               <a href="#" className="hover:text-textPrimary transition-colors">Contact</a>
