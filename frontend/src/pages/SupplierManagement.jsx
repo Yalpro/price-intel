@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import DataTable from '../components/DataTable';
 import StatusBadge, { LiveStatusPulse } from '../components/UIComponents';
-import { Play, Store, Loader2 } from 'lucide-react';
+import { Play, Store, Loader2, Square, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
 const SupplierManagement = () => {
   const [suppliers, setSuppliers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [runningSuppliers, setRunningSuppliers] = useState(new Set());
+  const [stoppingSuppliers, setStoppingSuppliers] = useState(new Set());
+  const [feedbackMsg, setFeedbackMsg] = useState(null);
 
   useEffect(() => {
     fetchSuppliers();
@@ -16,8 +18,31 @@ const SupplierManagement = () => {
   const fetchSuppliers = async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase.from('suppliers').select('*').order('id');
-      if (data) setSuppliers(data);
+      const [suppRes] = await Promise.all([
+        supabase.from('suppliers').select('*').order('id')
+      ]);
+
+      if (suppRes.data) setSuppliers(suppRes.data);
+
+      // Verify genuinely running in-memory scrapers via backend API
+      try {
+        const activeRes = await fetch('/api/scrapers/active');
+        if (activeRes.ok) {
+          const activeData = await activeRes.json();
+          if (activeData.activeSuppliers && suppRes.data) {
+            const activeSet = new Set();
+            suppRes.data.forEach(s => {
+              if (activeData.activeSuppliers.includes(s.name.toLowerCase())) {
+                activeSet.add(s.id);
+              }
+            });
+            setRunningSuppliers(activeSet);
+          }
+        }
+      } catch (e) {
+        console.warn('In-memory active scraper check fallback:', e.message);
+      }
+
     } catch (err) {
       console.error(err);
     } finally {
@@ -28,34 +53,90 @@ const SupplierManagement = () => {
   const handleRunNow = async (supplier) => {
     if (runningSuppliers.has(supplier.id)) return;
     
+    if (!confirm(`Start manual scraper run for ${supplier.name.toUpperCase()} against active database catalogue?`)) {
+      return;
+    }
+
     setRunningSuppliers(prev => new Set(prev).add(supplier.id));
+    setFeedbackMsg(null);
     
     try {
-      // Call backend API
-      const response = await fetch(`/api/scrapers/${supplier.name}/run`, {
+      const response = await fetch(`/api/scrapers/run`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
-        }
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ supplier: supplier.name })
       });
       
-      if (!response.ok) throw new Error('Failed to start run');
+      const text = await response.text();
+      let resData = {};
+      try {
+        resData = text ? JSON.parse(text) : {};
+      } catch (e) {
+        resData = { error: `Server response error (${response.status}): ${text}` };
+      }
+
+      if (!response.ok || resData.success === false) {
+        throw new Error(resData.error || 'Failed to start run');
+      }
       
-      // In a real implementation, we would poll /api/scrapers/:supplier/status
-      // For now, we simulate completion after some time
-      setTimeout(() => {
-        setRunningSuppliers(prev => {
-          const next = new Set(prev);
-          next.delete(supplier.id);
-          return next;
-        });
-      }, 5000);
+      setFeedbackMsg({ type: 'success', text: `Scraper run started for ${supplier.name.toUpperCase()}!` });
+      fetchSuppliers();
       
     } catch (err) {
       console.error(err);
-      alert(`Failed to start scraper for ${supplier.name}`);
+      setFeedbackMsg({ type: 'error', text: err.message });
       setRunningSuppliers(prev => {
+        const next = new Set(prev);
+        next.delete(supplier.id);
+        return next;
+      });
+    }
+  };
+
+  const handleStopNow = async (supplier) => {
+    if (!confirm(`Stop the current ${supplier.name.toUpperCase()} scraper run?`)) {
+      return;
+    }
+
+    setStoppingSuppliers(prev => new Set(prev).add(supplier.id));
+    setFeedbackMsg(null);
+
+    try {
+      const response = await fetch(`/api/scrapers/stop`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ supplier: supplier.name })
+      });
+
+      const text = await response.text();
+      let resData = {};
+      try {
+        resData = text ? JSON.parse(text) : {};
+      } catch (e) {
+        resData = { error: `Server response error (${response.status}): ${text}` };
+      }
+
+      if (!response.ok || resData.success === false) {
+        throw new Error(resData.error || 'Failed to stop scraper');
+      }
+
+      setFeedbackMsg({ type: 'success', text: resData.message || `Scraper run for ${supplier.name.toUpperCase()} stopped cleanly.` });
+      setRunningSuppliers(prev => {
+        const next = new Set(prev);
+        next.delete(supplier.id);
+        return next;
+      });
+      fetchSuppliers();
+
+    } catch (err) {
+      console.error(err);
+      setFeedbackMsg({ type: 'error', text: err.message });
+    } finally {
+      setStoppingSuppliers(prev => {
         const next = new Set(prev);
         next.delete(supplier.id);
         return next;
@@ -69,7 +150,7 @@ const SupplierManagement = () => {
       accessor: 'name',
       render: (row) => (
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-textSecondary">
+          <div className="w-8 h-8 rounded-xl bg-[#0A0E0C] border border-border flex items-center justify-center text-accentMint font-bold">
             <Store size={16} />
           </div>
           <span className="capitalize font-semibold text-textPrimary">{row.name}</span>
@@ -90,7 +171,7 @@ const SupplierManagement = () => {
       header: 'Config (Branch/Depot)',
       accessor: 'config',
       render: (row) => (
-        <span className="text-textSecondary text-sm font-mono bg-gray-50 px-2 py-1 rounded border border-border">
+        <span className="text-textSecondary text-xs font-mono bg-[#0A0E0C] px-2.5 py-1 rounded-lg border border-border">
           {row.connector_config ? JSON.stringify(row.connector_config) : '{}'}
         </span>
       )
@@ -101,24 +182,34 @@ const SupplierManagement = () => {
       align: 'right',
       render: (row) => {
         const isRunning = runningSuppliers.has(row.id);
+        const isStopping = stoppingSuppliers.has(row.id);
         
         return (
           <div className="flex justify-end items-center gap-3">
             {isRunning && <LiveStatusPulse isActive={true} colorClass="bg-warning" />}
-            <button
-              onClick={() => handleRunNow(row)}
-              disabled={isRunning || !row.active}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                isRunning 
-                  ? 'bg-gray-100 text-textSecondary cursor-not-allowed'
-                  : !row.active 
-                    ? 'bg-gray-50 text-gray-400 cursor-not-allowed'
-                    : 'bg-accent/10 text-accent hover:bg-accent/20'
-              }`}
-            >
-              {isRunning ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
-              {isRunning ? 'Running...' : 'Run Now'}
-            </button>
+            {isRunning ? (
+              <button
+                onClick={() => handleStopNow(row)}
+                disabled={isStopping}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-danger/20 text-danger border border-danger/40 hover:bg-danger/30 transition-colors cursor-pointer"
+              >
+                {isStopping ? <Loader2 size={14} className="animate-spin" /> : <Square size={14} className="fill-current" />}
+                <span>{isStopping ? 'Stopping...' : 'Stop Scraper'}</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => handleRunNow(row)}
+                disabled={!row.active}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
+                  !row.active 
+                    ? 'bg-[#0A0E0C] text-textSecondary cursor-not-allowed border border-border'
+                    : 'bg-accent/10 text-accentMint border border-emerald-800/60 hover:bg-savingBg'
+                }`}
+              >
+                <Play size={14} />
+                <span>Run Now</span>
+              </button>
+            )}
           </div>
         );
       }
@@ -126,8 +217,27 @@ const SupplierManagement = () => {
   ];
 
   return (
-    <div className="space-y-6 max-w-5xl">
-      <div className="h-[600px]">
+    <div className="space-y-6 max-w-5xl font-inter">
+      <div className="flex justify-between items-center bg-surface p-6 rounded-2xl border border-border">
+        <div>
+          <h2 className="text-xl font-sora font-bold text-textPrimary tracking-tight">Supplier Management</h2>
+          <p className="text-xs text-textSecondary mt-0.5">Manage connected wholesale cash & carry suppliers and trigger manual execution</p>
+        </div>
+      </div>
+
+      {feedbackMsg && (
+        <div className={`p-4 rounded-xl flex items-center justify-between text-xs font-semibold ${
+          feedbackMsg.type === 'success' ? 'bg-savingBg text-accentMint border border-emerald-800' : 'bg-danger/10 text-danger border border-danger/30'
+        }`}>
+          <div className="flex items-center gap-2">
+            {feedbackMsg.type === 'success' ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
+            <span>{feedbackMsg.text}</span>
+          </div>
+          <button onClick={() => setFeedbackMsg(null)} className="text-xs opacity-70 hover:opacity-100">✕</button>
+        </div>
+      )}
+
+      <div className="bg-surface border border-border rounded-2xl p-6 min-h-[400px]">
         <DataTable 
           columns={tableColumns} 
           data={suppliers} 

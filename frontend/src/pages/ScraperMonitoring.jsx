@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import DataTable from '../components/DataTable';
 import StatusBadge, { LiveStatusPulse, EmptyState } from '../components/UIComponents';
-import { Activity, Play, RefreshCw, AlertTriangle, CheckCircle2, Clock, Loader2 } from 'lucide-react';
+import { Activity, Play, RefreshCw, AlertTriangle, CheckCircle2, Clock, Loader2, Square } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
 const ScraperMonitoring = () => {
@@ -11,6 +11,7 @@ const ScraperMonitoring = () => {
   const [runningSuppliers, setRunningSuppliers] = useState(new Set());
   const [selectedErrorLog, setSelectedErrorLog] = useState(null);
   const [feedbackMsg, setFeedbackMsg] = useState(null);
+  const [stoppingSuppliers, setStoppingSuppliers] = useState(new Set());
 
   useEffect(() => {
     fetchData();
@@ -35,12 +36,24 @@ const ScraperMonitoring = () => {
       if (runsRes.data) setRuns(runsRes.data);
       if (suppRes.data) setSuppliers(suppRes.data);
 
-      // Track currently running suppliers
-      const activeRunning = new Set();
-      (runsRes.data || []).forEach(r => {
-        if (r.status === 'running') activeRunning.add(r.supplier_id);
-      });
-      setRunningSuppliers(activeRunning);
+      // Verify genuinely running in-memory scrapers via backend API
+      try {
+        const activeRes = await fetch('/api/scrapers/active');
+        if (activeRes.ok) {
+          const activeData = await activeRes.json();
+          if (activeData.activeSuppliers && suppRes.data) {
+            const activeSet = new Set();
+            suppRes.data.forEach(s => {
+              if (activeData.activeSuppliers.includes(s.name.toLowerCase())) {
+                activeSet.add(s.id);
+              }
+            });
+            setRunningSuppliers(activeSet);
+          }
+        }
+      } catch (e) {
+        console.warn('In-memory active scraper check fallback:', e.message);
+      }
 
     } catch (err) {
       console.error('Failed to fetch scraper runs:', err);
@@ -70,12 +83,19 @@ const ScraperMonitoring = () => {
         })
       });
 
-      if (res.ok) {
+      const text = await res.text();
+      let resData = {};
+      try {
+        resData = text ? JSON.parse(text) : {};
+      } catch (e) {
+        resData = { error: `Server response error (${res.status}): ${text}` };
+      }
+
+      if (res.ok && resData.success !== false) {
         setFeedbackMsg({ type: 'success', text: `Scraper run started for ${supplier.name.toUpperCase()}!` });
         fetchData();
       } else {
-        const errData = await res.json();
-        setFeedbackMsg({ type: 'error', text: errData.error || `Failed to start ${supplier.name} scraper.` });
+        setFeedbackMsg({ type: 'error', text: resData.error || `Failed to start ${supplier.name} scraper.` });
         setRunningSuppliers(prev => {
           const next = new Set(prev);
           next.delete(supplier.id);
@@ -85,6 +105,55 @@ const ScraperMonitoring = () => {
     } catch (err) {
       setFeedbackMsg({ type: 'error', text: err.message });
       setRunningSuppliers(prev => {
+        const next = new Set(prev);
+        next.delete(supplier.id);
+        return next;
+      });
+    }
+  };
+
+  const handleStopSupplier = async (supplier) => {
+    if (!confirm(`Stop the current ${supplier.name.toUpperCase()} scraper run?`)) {
+      return;
+    }
+
+    setStoppingSuppliers(prev => new Set(prev).add(supplier.id));
+    setFeedbackMsg(null);
+
+    try {
+      const res = await fetch('/api/scrapers/stop', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          supplier: supplier.name
+        })
+      });
+
+      const text = await res.text();
+      let resData = {};
+      try {
+        resData = text ? JSON.parse(text) : {};
+      } catch (e) {
+        resData = { error: `Server response error (${res.status}): ${text}` };
+      }
+
+      if (res.ok && resData.success !== false) {
+        setFeedbackMsg({ type: 'success', text: resData.message || `Scraper run for ${supplier.name.toUpperCase()} stopped cleanly.` });
+        setRunningSuppliers(prev => {
+          const next = new Set(prev);
+          next.delete(supplier.id);
+          return next;
+        });
+        fetchData();
+      } else {
+        setFeedbackMsg({ type: 'error', text: resData.error || `Failed to stop ${supplier.name} scraper.` });
+      }
+    } catch (err) {
+      setFeedbackMsg({ type: 'error', text: err.message });
+    } finally {
+      setStoppingSuppliers(prev => {
         const next = new Set(prev);
         next.delete(supplier.id);
         return next;
@@ -106,7 +175,7 @@ const ScraperMonitoring = () => {
         <div className="flex items-center gap-2">
           <LiveStatusPulse 
             isActive={row.status === 'running'} 
-            colorClass={row.status === 'failed' ? 'bg-danger' : row.status === 'running' ? 'bg-warning' : 'bg-success'} 
+            colorClass={row.status === 'failed' || row.status === 'cancelled' ? 'bg-danger' : row.status === 'running' ? 'bg-warning' : 'bg-success'} 
           />
           <span className="capitalize font-semibold text-textPrimary">{row.suppliers?.name || 'Unknown'}</span>
         </div>
@@ -117,10 +186,18 @@ const ScraperMonitoring = () => {
       accessor: 'status',
       render: (row) => {
         let type = 'default';
-        if (row.status === 'success' || row.status === 'completed') type = 'success';
-        if (row.status === 'failed') type = 'danger';
-        if (row.status === 'running') type = 'warning';
-        return <StatusBadge status={row.status} type={type} />;
+        let label = row.status;
+        if (row.log && row.log.toLowerCase().includes('cancelled')) {
+          label = 'cancelled';
+          type = 'danger';
+        } else if (row.status === 'success' || row.status === 'completed') {
+          type = 'success';
+        } else if (row.status === 'failed') {
+          type = 'danger';
+        } else if (row.status === 'running') {
+          type = 'warning';
+        }
+        return <StatusBadge status={label} type={type} />;
       }
     },
     {
@@ -161,12 +238,12 @@ const ScraperMonitoring = () => {
       align: 'right',
       render: (row) => (
         <div>
-          {row.error_message ? (
+          {row.error_message || row.log ? (
             <button
               onClick={() => setSelectedErrorLog(row)}
               className="text-xs text-danger hover:underline font-mono"
             >
-              View Error Log
+              View Log
             </button>
           ) : (
             <span className="text-xs text-textSecondary font-mono">—</span>
@@ -182,7 +259,7 @@ const ScraperMonitoring = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-surface p-6 rounded-2xl border border-border">
         <div>
           <h2 className="text-xl font-sora font-bold text-textPrimary tracking-tight">Scraper Runs & Monitoring</h2>
-          <p className="text-sm text-textSecondary mt-0.5">Real-time database monitoring for Booker, Parfetts, Costco, and Bestway scraper runs</p>
+          <p className="text-sm text-textSecondary mt-0.5">Real-time database monitoring and graceful execution control for cash & carry scrapers</p>
         </div>
 
         <div className="flex items-center gap-3">
@@ -196,29 +273,38 @@ const ScraperMonitoring = () => {
         </div>
       </div>
 
-      {/* Manual Execution Action Bar */}
+      {/* Execution & Stop Control Action Bar */}
       <div className="bg-surface border border-border p-6 rounded-2xl space-y-4">
         <h3 className="text-xs font-mono font-semibold uppercase text-textSecondary tracking-wider">
-          Manual Scraper Execution (Active Database Catalogue Only)
+          Scraper Execution Controls (Active Database Catalogue)
         </h3>
 
         <div className="flex flex-wrap gap-3">
           {suppliers.map((s) => {
             const isRunning = runningSuppliers.has(s.id);
+            const isStopping = stoppingSuppliers.has(s.id);
+
             return (
-              <button
-                key={s.id}
-                onClick={() => handleRunSupplier(s)}
-                disabled={isRunning}
-                className={`px-4 py-2.5 rounded-xl font-semibold text-xs transition-all flex items-center gap-2 cursor-pointer ${
-                  isRunning
-                    ? 'bg-amber-950/60 text-amber-300 border border-amber-800/60 cursor-not-allowed'
-                    : 'bg-accent hover:bg-accentHover text-white shadow-sm'
-                }`}
-              >
-                {isRunning ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
-                <span>{isRunning ? `Running ${s.name.toUpperCase()}...` : `Run ${s.name.toUpperCase()}`}</span>
-              </button>
+              <div key={s.id} className="flex items-center gap-2">
+                {isRunning ? (
+                  <button
+                    onClick={() => handleStopSupplier(s)}
+                    disabled={isStopping}
+                    className="px-4 py-2.5 rounded-xl font-semibold text-xs transition-all flex items-center gap-2 cursor-pointer bg-danger/20 text-danger border border-danger/40 hover:bg-danger/30 shadow-sm"
+                  >
+                    {isStopping ? <Loader2 size={14} className="animate-spin" /> : <Square size={14} className="fill-current" />}
+                    <span>{isStopping ? `Stopping ${s.name.toUpperCase()}...` : `Stop ${s.name.toUpperCase()}`}</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleRunSupplier(s)}
+                    className="px-4 py-2.5 rounded-xl font-semibold text-xs transition-all flex items-center gap-2 cursor-pointer bg-accent hover:bg-accentHover text-white shadow-sm"
+                  >
+                    <Play size={14} />
+                    <span>Run {s.name.toUpperCase()}</span>
+                  </button>
+                )}
+              </div>
             );
           })}
         </div>
@@ -257,7 +343,7 @@ const ScraperMonitoring = () => {
         </div>
       </div>
 
-      {/* Error Log Modal */}
+      {/* Error / Cancellation Log Modal */}
       {selectedErrorLog && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-surface border border-border rounded-2xl p-6 max-w-lg w-full space-y-4 shadow-2xl">
@@ -270,7 +356,7 @@ const ScraperMonitoring = () => {
             </div>
 
             <div className="bg-[#0A0E0C] border border-border p-4 rounded-xl font-mono text-xs text-danger overflow-x-auto max-h-60">
-              {selectedErrorLog.error_message || 'No detailed error stack recorded.'}
+              {selectedErrorLog.error_message || selectedErrorLog.log || 'No detailed error stack recorded.'}
             </div>
 
             <div className="flex justify-end pt-2">

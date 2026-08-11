@@ -22,6 +22,9 @@ class BaseScraper {
     this.startTime = null;
     this.supplierRow = null;
     this.metadataLayer = new GlobalMetadataLayer();
+    this.isCancelled = false;
+    this.cancellationReason = null;
+    this.isFinalized = false;
 
     this.stats = {
       attemptedCount: 0,
@@ -49,6 +52,12 @@ class BaseScraper {
       supportsPromotionBadges: true,
       exposesBarcodesInDOM: true,
     };
+  }
+
+  cancel(reason = 'Manually stopped by administrator') {
+    this.isCancelled = true;
+    this.cancellationReason = reason;
+    console.warn(`[${this.supplierName}] Cancellation requested: ${reason}`);
   }
 
   async delay(ms = 500) {
@@ -115,6 +124,8 @@ class BaseScraper {
   }
 
   async finalizeRun(status, logMessage = '') {
+    if (this.isFinalized) return;
+    this.isFinalized = true;
     try {
       const durationSeconds = Math.floor((Date.now() - this.startTime) / 1000);
 
@@ -144,9 +155,9 @@ class BaseScraper {
         .update(updatePayload)
         .eq('id', this.runId);
 
-      if (error && error.message.includes('column')) {
+      if (error) {
+        console.error(`[${this.supplierName}] finalizeRun update error:`, error.message);
         // Fallback for pre-migration schema: update only existing columns
-        console.warn(`[${this.supplierName}] New metrics columns not yet in DB schema. Updating existing columns only.`);
         await supabase
           .from('scraper_runs')
           .update({
@@ -155,7 +166,6 @@ class BaseScraper {
             duration_seconds: durationSeconds,
             attempted_count: this.stats.attemptedCount,
             successful_price_count: this.stats.successfulPriceCount,
-            missing_pack_count: this.stats.missingPackCount,
             error_count: this.stats.errorCount,
             log: logMessage,
           })
@@ -409,6 +419,7 @@ class BaseScraper {
   }
 
   async processProduct(rawCsvProduct, page) {
+    if (this.isCancelled) return;
     this.stats.attemptedCount++;
     const now = new Date().toISOString();
 
@@ -440,6 +451,7 @@ class BaseScraper {
     console.log(`\n[${this.supplierName}] Processing: ${product.product_name} (${product.barcode})`);
 
     for (const strategy of strategies) {
+      if (this.isCancelled) return;
       const searchStart = Date.now();
       let candidates = [];
       let errorMessage = null;
@@ -653,8 +665,18 @@ class BaseScraper {
       }
 
       for (const product of products) {
+        if (this.isCancelled) {
+          console.warn(`[${this.supplierName}] Scraper run cancelled. Exiting item loop.`);
+          break;
+        }
         await this.delay();
         await this.processProduct(product, page);
+      }
+
+      if (this.isCancelled) {
+        console.log(`\n=== Cancelled ${this.supplierName} Scraper (Run ID: ${this.runId}) ===`);
+        await this.finalizeRun('failed', this.cancellationReason || 'Cancelled: Manually stopped by administrator');
+        return this.stats;
       }
 
       console.log(`\n=== Completed ${this.supplierName} Scraper ===`);

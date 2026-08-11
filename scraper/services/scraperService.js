@@ -23,6 +23,14 @@ if (!fs.existsSync(CSV_PATH)) {
 }
 
 class ScraperService {
+  constructor() {
+    this.activeScrapers = {};
+  }
+
+  getActiveScrapers() {
+    return Object.keys(this.activeScrapers).map(k => k.toLowerCase());
+  }
+
   getScraperInstance(supplierName) {
     const name = supplierName.toLowerCase();
     switch (name) {
@@ -47,16 +55,83 @@ class ScraperService {
     }
 
     const scraper = this.getScraperInstance(key);
+    this.activeScrapers[key] = scraper;
 
-    // Fire-and-forget: run() internally calls initRun(), handles locking, and finalizes.
-    scraper.run(CSV_PATH).then((stats) => {
-      console.log(`[${key}] Run completed. Stats:`, stats);
-    }).catch((err) => {
-      console.error(`[${key}] Run failed:`, err.message);
-    });
+    // Fire-and-forget execution with cleanup handler
+    scraper.run(CSV_PATH)
+      .then((stats) => {
+        console.log(`[${key}] Run finished. Stats:`, stats);
+      })
+      .catch((err) => {
+        console.error(`[${key}] Run error:`, err.message);
+      })
+      .finally(() => {
+        delete this.activeScrapers[key];
+        runLocks[key] = false;
+      });
 
-    // Return immediately so HTTP response is fast
     return { message: `Scraper for '${supplierName}' dispatched successfully.` };
+  }
+
+  async stopScraper(supplierName) {
+    const key = supplierName.toLowerCase();
+    const activeScraper = this.activeScrapers[key];
+
+    if (activeScraper) {
+      activeScraper.cancel('Cancelled: Manually stopped by administrator');
+      await activeScraper.close().catch(() => {});
+
+      if (activeScraper.runId) {
+        const durationSec = activeScraper.startTime ? Math.floor((Date.now() - activeScraper.startTime) / 1000) : 0;
+        await supabase
+          .from('scraper_runs')
+          .update({
+            status: 'failed',
+            completed_at: new Date().toISOString(),
+            duration_seconds: durationSec,
+            attempted_count: activeScraper.stats?.attemptedCount || 0,
+            log: 'Cancelled: Manually stopped by administrator',
+            error_message: 'Cancelled: Manually stopped by administrator'
+          })
+          .eq('id', activeScraper.runId);
+      }
+
+      delete this.activeScrapers[key];
+      runLocks[key] = false;
+
+      return { 
+        message: `Scraper run ${activeScraper.runId ? '#' + activeScraper.runId : ''} for '${supplierName}' cancelled cleanly.`,
+        runId: activeScraper.runId 
+      };
+    }
+
+    // Fallback: Check if DB records a running status for this supplier
+    const statusRecord = await this.getScraperStatus(key);
+    if (statusRecord && statusRecord.status === 'running') {
+      const durationSeconds = statusRecord.started_at
+        ? Math.floor((Date.now() - new Date(statusRecord.started_at).getTime()) / 1000)
+        : 0;
+
+      await supabase
+        .from('scraper_runs')
+        .update({
+          status: 'failed',
+          completed_at: new Date().toISOString(),
+          duration_seconds: durationSeconds,
+          log: 'Cancelled: Manually stopped by administrator',
+          error_message: 'Cancelled: Manually stopped by administrator'
+        })
+        .eq('id', statusRecord.id);
+
+      runLocks[key] = false;
+      return { 
+        message: `Scraper run #${statusRecord.id} for '${supplierName}' marked as cancelled.`,
+        runId: statusRecord.id 
+      };
+    }
+
+    runLocks[key] = false;
+    return { message: `Scraper for '${supplierName}' stopped.` };
   }
 
   async getScraperStatus(supplierName) {
