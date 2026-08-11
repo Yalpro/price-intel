@@ -3,8 +3,7 @@ import {
   Flame, Search, TrendingDown, RefreshCw, ExternalLink, CheckCircle2, Eye, AlertCircle
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+import { API_BASE_URL } from '../../config/apiConfig';
 
 export const DailyDeals = () => {
   const [deals, setDeals] = useState([]);

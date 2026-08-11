@@ -16,7 +16,11 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 const HOST = process.env.HOST || '0.0.0.0';
 
-app.use(cors());
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-api-secret']
+}));
 app.use(express.json());
 
 const retailerRoutes = require('./routes/retailerRoutes');

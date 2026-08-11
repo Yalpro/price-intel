@@ -4,8 +4,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { useNavigate } from 'react-router-dom';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+import { API_BASE_URL } from '../../config/apiConfig';
 
 export const ProductSearch = () => {
   const navigate = useNavigate();
