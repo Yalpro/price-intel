@@ -4,7 +4,13 @@ const fs = require('fs');
 const { BaseScraper } = require('./BaseScraper');
 const ProductMetadataParser = require('../utils/ProductMetadataParser');
 
-const STORAGE_STATE_PATH = path.join(__dirname, 'parfetts_state.json');
+const STORAGE_STATE_PATH = process.env.PARFETTS_STORAGE_STATE_PATH || path.join(process.cwd(), 'sessions', 'parfetts_state.json');
+
+// Ensure parent sessions directory exists before read/write operations
+const SESSION_DIR = path.dirname(STORAGE_STATE_PATH);
+if (!fs.existsSync(SESSION_DIR)) {
+  fs.mkdirSync(SESSION_DIR, { recursive: true });
+}
 
 class ParfettsScraper extends BaseScraper {
   constructor() {
