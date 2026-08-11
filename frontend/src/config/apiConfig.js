@@ -1,2 +1,2 @@
-// Centralized API Base URL Configuration (Vercel Serverless & Express Proxy)
-export const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+// Single Authoritative Production API Configuration
+export const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://api.anaprice.com';

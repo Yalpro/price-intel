@@ -22,6 +22,19 @@ export default defineConfig({
       devOptions: {
         enabled: true
       },
+      workbox: {
+        navigateFallbackDenylist: [/^\/api/],
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/api\.anaprice\.com\/.*/i,
+            handler: 'NetworkOnly'
+          },
+          {
+            urlPattern: /^\/api\/.*/i,
+            handler: 'NetworkOnly'
+          }
+        ]
+      },
       manifest: {
         name: 'Anaprice — Wholesale Price Intelligence',
         short_name: 'Anaprice',
