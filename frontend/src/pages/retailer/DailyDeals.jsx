@@ -4,6 +4,8 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
 export const DailyDeals = () => {
   const [deals, setDeals] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -20,7 +22,7 @@ export const DailyDeals = () => {
     setLoading(true);
     try {
       // 1. Try backend API first
-      const res = await fetch('/api/retailer/deals');
+      const res = await fetch(`${API_BASE_URL}/api/retailer/deals`);
       if (res.ok) {
         const apiData = await res.json();
         if (apiData.success) {

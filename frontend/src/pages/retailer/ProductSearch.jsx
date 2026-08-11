@@ -5,6 +5,8 @@ import {
 import { supabase } from '../../supabaseClient';
 import { useNavigate } from 'react-router-dom';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
 export const ProductSearch = () => {
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
@@ -50,7 +52,7 @@ export const ProductSearch = () => {
     const handler = setTimeout(async () => {
       setIsAutocompleting(true);
       try {
-        const res = await fetch(`/api/retailer/autocomplete?q=${encodeURIComponent(searchTerm)}`);
+        const res = await fetch(`${API_BASE_URL}/api/retailer/autocomplete?q=${encodeURIComponent(searchTerm)}`);
         if (res.ok) {
           const data = await res.json();
           if (data.success) {
@@ -88,7 +90,7 @@ export const ProductSearch = () => {
 
     try {
       // Fetch from backend API
-      const apiRes = await fetch(`/api/retailer/search?q=${encodeURIComponent(searchTerm)}`);
+      const apiRes = await fetch(`${API_BASE_URL}/api/retailer/search?q=${encodeURIComponent(searchTerm)}`);
       
       if (apiRes.ok) {
         const apiData = await apiRes.json();
