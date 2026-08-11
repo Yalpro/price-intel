@@ -14,6 +14,7 @@ if (isProduction && !apiSecret) {
 
 const app = express();
 const PORT = process.env.PORT || 4000;
+const HOST = process.env.HOST || '0.0.0.0';
 
 app.use(cors());
 app.use(express.json());
@@ -32,6 +33,7 @@ app.get('/health', (req, res) => {
 const { createClient } = require('@supabase/supabase-js');
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
 if (supabaseUrl && supabaseServiceKey) {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
   supabase
@@ -49,6 +51,22 @@ if (supabaseUrl && supabaseServiceKey) {
     .catch(() => {});
 }
 
-app.listen(PORT, () => {
-  console.log(`Scraper backend service running on http://localhost:${PORT}`);
+const server = app.listen(PORT, HOST, () => {
+  console.log(`Scraper backend service running on http://${HOST}:${PORT}`);
 });
+
+// Graceful Shutdown Handler for Docker SIGTERM / SIGINT signals
+const gracefulShutdown = (signal) => {
+  console.log(`[Server] Received ${signal}, initiating graceful shutdown...`);
+  server.close(() => {
+    console.log('[Server] Express HTTP server closed.');
+    process.exit(0);
+  });
+  setTimeout(() => {
+    console.error('[Server] Forced exit due to shutdown timeout.');
+    process.exit(1);
+  }, 10000);
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));

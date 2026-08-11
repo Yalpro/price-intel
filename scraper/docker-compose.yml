@@ -15,13 +15,14 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=4000
+      - HOST=0.0.0.0
     volumes:
       - scraper_sessions:/app/sessions
       - scraper_logs:/app/logs
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
-      interval: 30s
-      timeout: 10s
+      test: ["CMD-SHELL", "curl -f http://localhost:4000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
       retries: 3
       start_period: 10s
 

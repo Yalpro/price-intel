@@ -19,19 +19,26 @@ RUN npm ci --only=production
 # Copy application source code
 COPY . .
 
+# Ensure entrypoint script has executable permissions
+RUN chmod +x /app/docker-entrypoint.sh
+
 # Create writable directories for session storage and logs
 RUN mkdir -p /app/sessions /app/logs
 
 # Set production environment defaults
 ENV NODE_ENV=production
 ENV PORT=4000
+ENV HOST=0.0.0.0
 ENV DISPLAY=:99
 
 EXPOSE 4000
 
+# Set entrypoint to run background Xvfb and exec main command
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
+
 # Health check against live Express server endpoint
-HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
   CMD curl -f http://localhost:4000/health || exit 1
 
-# Start Express server via Xvfb virtual display for headed Chromium browser execution
-CMD ["xvfb-run", "--auto-servernum", "--server-args=-screen 0 1280x1024x24", "node", "server.js"]
+# Start Express server directly in foreground
+CMD ["node", "server.js"]
