@@ -16,6 +16,7 @@ import {
   BadgePercent,
   Settings
 } from 'lucide-react';
+import AnapriceLogo from '../components/AnapriceLogo';
 
 const AdminLayout = () => {
   const [collapsed, setCollapsed] = useState(false);
@@ -53,11 +54,11 @@ const AdminLayout = () => {
   };
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden relative">
+    <div className="flex h-screen bg-background overflow-hidden relative font-inter text-textPrimary antialiased selection:bg-accent/30 selection:text-accentMint">
       {/* Mobile Sidebar Overlay */}
       {mobileMenuOpen && (
         <div 
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-40 lg:hidden"
           onClick={() => setMobileMenuOpen(false)}
         />
       )}
@@ -69,14 +70,14 @@ const AdminLayout = () => {
         } ${collapsed ? 'lg:w-16 w-64' : 'w-64'}`}
       >
         <div className="h-16 flex items-center justify-between px-4 border-b border-border shrink-0">
-          <span className={`font-sora font-semibold text-lg text-textPrimary truncate ${collapsed ? 'lg:hidden' : ''}`}>
-            Admin Portal
-          </span>
+          <div className="flex items-center gap-2">
+            <AnapriceLogo size={28} showText={!collapsed} />
+          </div>
           
           {/* Desktop collapse toggle */}
           <button 
             onClick={() => setCollapsed(!collapsed)}
-            className="hidden lg:flex text-textSecondary hover:text-textPrimary transition-colors p-1 rounded items-center justify-center"
+            className="hidden lg:flex text-textSecondary hover:text-textPrimary transition-colors p-1 rounded items-center justify-center cursor-pointer"
           >
             <Menu size={18} />
           </button>
@@ -84,7 +85,7 @@ const AdminLayout = () => {
           {/* Mobile close toggle */}
           <button 
             onClick={() => setMobileMenuOpen(false)}
-            className="lg:hidden flex text-textSecondary hover:text-textPrimary transition-colors p-1 rounded items-center justify-center"
+            className="lg:hidden flex text-textSecondary hover:text-textPrimary transition-colors p-1 rounded items-center justify-center cursor-pointer"
           >
             <X size={18} />
           </button>
@@ -99,15 +100,15 @@ const AdminLayout = () => {
               <NavLink
                 key={item.path}
                 to={item.path}
-                className={`flex items-center px-4 py-2.5 mx-2 rounded-lg transition-colors group ${
+                className={`flex items-center px-4 py-2.5 mx-2 rounded-xl transition-colors group ${
                   isActive 
-                    ? 'bg-accentSoft text-accent' 
-                    : 'text-textSecondary hover:bg-gray-50 hover:text-textPrimary'
+                    ? 'bg-accentSoft text-accentMint font-semibold border border-emerald-800/40' 
+                    : 'text-textSecondary hover:bg-[#1A221D] hover:text-textPrimary'
                 }`}
                 title={collapsed ? item.label : undefined}
               >
                 <Icon size={18} strokeWidth={1.75} className={isActive ? 'text-accent' : 'text-textSecondary group-hover:text-textPrimary'} />
-                <span className={`ml-3 font-medium text-sm ${collapsed ? 'lg:hidden' : ''}`}>
+                <span className={`ml-3 text-sm ${collapsed ? 'lg:hidden' : ''}`}>
                   {item.label}
                 </span>
               </NavLink>
@@ -118,7 +119,7 @@ const AdminLayout = () => {
         <div className="p-4 border-t border-border shrink-0">
           <button
             onClick={logout}
-            className={`flex items-center w-full px-4 py-2 rounded-lg text-textSecondary hover:bg-gray-50 hover:text-textPrimary transition-colors ${
+            className={`flex items-center w-full px-4 py-2 rounded-xl text-textSecondary hover:bg-[#1A221D] hover:text-danger transition-colors cursor-pointer ${
               collapsed ? 'lg:justify-center' : ''
             }`}
             title={collapsed ? 'Logout' : undefined}
@@ -143,18 +144,18 @@ const AdminLayout = () => {
             <h1 className="font-sora font-semibold text-textPrimary tracking-tight truncate">
               {breadcrumbs[location.pathname] || 'Admin Portal'}
             </h1>
-            <span className="hidden sm:inline-block text-xs font-medium text-textSecondary bg-gray-100 px-2 py-0.5 rounded">
-              Admin
+            <span className="hidden sm:inline-block text-xs font-mono font-bold text-accentMint bg-savingBg border border-emerald-800 px-2 py-0.5 rounded">
+              System Admin
             </span>
           </div>
           
           <div className="flex items-center gap-4">
             <div className="relative w-48 lg:w-64 hidden sm:block">
-              <Search size={16} strokeWidth={1.75} className="absolute left-3 top-1/2 -translate-y-1/2 text-textSecondary" />
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-textSecondary" />
               <input 
                 type="text" 
-                placeholder="Global search..." 
-                className="w-full pl-9 pr-4 py-1.5 bg-gray-50 border border-border rounded-lg text-sm text-textPrimary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-all"
+                placeholder="Global admin search..." 
+                className="w-full pl-9 pr-4 py-1.5 bg-[#0A0E0C] border border-border rounded-xl text-xs text-textPrimary focus:outline-none focus:border-accent transition-all font-inter"
               />
             </div>
             
@@ -165,7 +166,7 @@ const AdminLayout = () => {
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-auto p-4 lg:p-6">
+        <main className="flex-1 overflow-auto p-4 lg:p-6 bg-background">
           <div className="max-w-none">
             <Outlet />
           </div>

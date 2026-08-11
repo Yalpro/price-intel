@@ -1,0 +1,151 @@
+{
+  "categoryCounts": {
+    "PRODUCT_NOT_SOLD_BY_SUPPLIER": 112,
+    "OUT_OF_STOCK": 0,
+    "BARCODE_NOT_AVAILABLE": 0,
+    "SEARCH_RETURNED_NO_RESULTS": 83,
+    "VALIDATION_THRESHOLD_FAILURE": 0
+  },
+  "sampleDetails": [
+    {
+      "barcode": "5060688010055",
+      "name": "BIDLEY DAIRY SEMI-SKIMMED 2L",
+      "supplier": "booker",
+      "category": "PRODUCT_NOT_SOLD_BY_SUPPLIER",
+      "reason": "Regional local dairy/bakery SKU not in national wholesaler range"
+    },
+    {
+      "barcode": "5060688010055",
+      "name": "BIDLEY DAIRY SEMI-SKIMMED 2L",
+      "supplier": "bestway",
+      "category": "PRODUCT_NOT_SOLD_BY_SUPPLIER",
+      "reason": "Regional local dairy/bakery SKU not in national wholesaler range"
+    },
+    {
+      "barcode": "5060688010055",
+      "name": "BIDLEY DAIRY SEMI-SKIMMED 2L",
+      "supplier": "costco",
+      "category": "PRODUCT_NOT_SOLD_BY_SUPPLIER",
+      "reason": "Regional local dairy/bakery SKU not in national wholesaler range"
+    },
+    {
+      "barcode": "5000177500971",
+      "name": "MR FREEZE CLASSIC",
+      "supplier": "booker",
+      "category": "SEARCH_RETURNED_NO_RESULTS",
+      "reason": "Wholesaler search returned 0 matching candidate SKUs"
+    },
+    {
+      "barcode": "5000177500971",
+      "name": "MR FREEZE CLASSIC",
+      "supplier": "bestway",
+      "category": "SEARCH_RETURNED_NO_RESULTS",
+      "reason": "Wholesaler search returned 0 matching candidate SKUs"
+    },
+    {
+      "barcode": "5000177500971",
+      "name": "MR FREEZE CLASSIC",
+      "supplier": "costco",
+      "category": "PRODUCT_NOT_SOLD_BY_SUPPLIER",
+      "reason": "Costco warehouse bulk catalog does not carry single convenience unit SKU"
+    },
+    {
+      "barcode": "5060688010048",
+      "name": "BIDLEA SEMI-SKIMMED MILK",
+      "supplier": "booker",
+      "category": "PRODUCT_NOT_SOLD_BY_SUPPLIER",
+      "reason": "Regional local dairy/bakery SKU not in national wholesaler range"
+    },
+    {
+      "barcode": "5060688010048",
+      "name": "BIDLEA SEMI-SKIMMED MILK",
+      "supplier": "bestway",
+      "category": "PRODUCT_NOT_SOLD_BY_SUPPLIER",
+      "reason": "Regional local dairy/bakery SKU not in national wholesaler range"
+    },
+    {
+      "barcode": "5060688010048",
+      "name": "BIDLEA SEMI-SKIMMED MILK",
+      "supplier": "costco",
+      "category": "PRODUCT_NOT_SOLD_BY_SUPPLIER",
+      "reason": "Regional local dairy/bakery SKU not in national wholesaler range"
+    },
+    {
+      "barcode": "5060286261637",
+      "name": "FREE RANGE EGGS",
+      "supplier": "booker",
+      "category": "SEARCH_RETURNED_NO_RESULTS",
+      "reason": "Wholesaler search returned 0 matching candidate SKUs"
+    },
+    {
+      "barcode": "5060286261637",
+      "name": "FREE RANGE EGGS",
+      "supplier": "bestway",
+      "category": "SEARCH_RETURNED_NO_RESULTS",
+      "reason": "Wholesaler search returned 0 matching candidate SKUs"
+    },
+    {
+      "barcode": "5060286261637",
+      "name": "FREE RANGE EGGS",
+      "supplier": "costco",
+      "category": "PRODUCT_NOT_SOLD_BY_SUPPLIER",
+      "reason": "Costco warehouse bulk catalog does not carry single convenience unit SKU"
+    },
+    {
+      "barcode": "5060688010086",
+      "name": "BIDLEA DAIRY WHOLE MILK",
+      "supplier": "booker",
+      "category": "PRODUCT_NOT_SOLD_BY_SUPPLIER",
+      "reason": "Regional local dairy/bakery SKU not in national wholesaler range"
+    },
+    {
+      "barcode": "5060688010086",
+      "name": "BIDLEA DAIRY WHOLE MILK",
+      "supplier": "bestway",
+      "category": "PRODUCT_NOT_SOLD_BY_SUPPLIER",
+      "reason": "Regional local dairy/bakery SKU not in national wholesaler range"
+    },
+    {
+      "barcode": "5060688010086",
+      "name": "BIDLEA DAIRY WHOLE MILK",
+      "supplier": "costco",
+      "category": "PRODUCT_NOT_SOLD_BY_SUPPLIER",
+      "reason": "Regional local dairy/bakery SKU not in national wholesaler range"
+    },
+    {
+      "barcode": "5060221241847",
+      "name": "TANGO ASST ICE POPS",
+      "supplier": "booker",
+      "category": "SEARCH_RETURNED_NO_RESULTS",
+      "reason": "Wholesaler search returned 0 matching candidate SKUs"
+    },
+    {
+      "barcode": "5060221241847",
+      "name": "TANGO ASST ICE POPS",
+      "supplier": "bestway",
+      "category": "SEARCH_RETURNED_NO_RESULTS",
+      "reason": "Wholesaler search returned 0 matching candidate SKUs"
+    },
+    {
+      "barcode": "5060221241847",
+      "name": "TANGO ASST ICE POPS",
+      "supplier": "costco",
+      "category": "PRODUCT_NOT_SOLD_BY_SUPPLIER",
+      "reason": "Costco warehouse bulk catalog does not carry single convenience unit SKU"
+    },
+    {
+      "barcode": "5060688010079",
+      "name": "BIDLEA WHOLE MILK",
+      "supplier": "booker",
+      "category": "PRODUCT_NOT_SOLD_BY_SUPPLIER",
+      "reason": "Regional local dairy/bakery SKU not in national wholesaler range"
+    },
+    {
+      "barcode": "5060688010079",
+      "name": "BIDLEA WHOLE MILK",
+      "supplier": "bestway",
+      "category": "PRODUCT_NOT_SOLD_BY_SUPPLIER",
+      "reason": "Regional local dairy/bakery SKU not in national wholesaler range"
+    }
+  ]
+}

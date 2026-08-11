@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { 
   ArrowRight, Search, Zap, CheckCircle2, ShieldCheck, RefreshCw, ChevronRight, Building2, TrendingDown, PackageCheck, Layers, BarChart3, Smartphone, Clock, Scale, Sparkles, Check
 } from 'lucide-react';
-import AnapriceLogo from '../../components/AnapriceLogo';
+import IntroSplash from '../../components/IntroSplash';
 
 // Hero Floating Comparison Card (Public-Safe Generic Labels)
 const HeroComparisonCard = () => (
@@ -91,8 +91,11 @@ const HeroComparisonCard = () => (
 );
 
 const Home = () => {
+  const [showSplash, setShowSplash] = useState(true);
+
   return (
     <div className="space-y-24 pb-20 font-inter text-textPrimary bg-background antialiased selection:bg-accent/30 selection:text-accentMint">
+      {showSplash && <IntroSplash onComplete={() => setShowSplash(false)} />}
       
       {/* 1. HERO SECTION */}
       <section className="pt-12 md:pt-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">

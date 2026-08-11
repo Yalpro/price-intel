@@ -118,12 +118,44 @@ router.get('/:id/errors', verifyAdminRole, async (req, res) => {
   }
 });
 
+const multer = require('multer');
+
+// Configure multer storage for temp uploads
+const uploadsDir = path.join(__dirname, '..', 'temp_uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+const upload = multer({
+  dest: uploadsDir,
+  limits: { fileSize: 50 * 1024 * 1024 } // 50MB max file size
+});
+
 // 4. POST /api/admin/catalogues/upload - Process CSV upload and create draft version
-router.post('/upload', verifyAdminRole, async (req, res) => {
+router.post('/upload', verifyAdminRole, upload.single('file'), async (req, res) => {
+  let tempPath = null;
   try {
-    const { filePath, originalFileName, catalogueMonth, notes } = req.body;
-    if (!filePath || !originalFileName) {
-      return res.status(400).json({ error: "Missing required fields 'filePath' or 'originalFileName'." });
+    let filePath = null;
+    let originalFileName = null;
+    let catalogueMonth = req.body?.catalogueMonth;
+    let notes = req.body?.notes;
+
+    if (req.file) {
+      tempPath = req.file.path;
+      filePath = req.file.path;
+      originalFileName = req.file.originalname;
+    } else if (req.body?.filePath) {
+      filePath = req.body.filePath;
+      originalFileName = req.body.originalFileName || path.basename(filePath);
+    } else if (req.body?.fileContent) {
+      // Base64 or plain string content upload fallback
+      originalFileName = req.body.originalFileName || 'uploaded_catalogue.csv';
+      tempPath = path.join(uploadsDir, `${Date.now()}_${originalFileName}`);
+      const content = req.body.fileContent.includes('base64,') ? Buffer.from(req.body.fileContent.split('base64,')[1], 'base64') : req.body.fileContent;
+      fs.writeFileSync(tempPath, content);
+      filePath = tempPath;
+    } else {
+      return res.status(400).json({ error: "No file uploaded. Attach 'file' or provide 'filePath'/'fileContent'." });
     }
 
     const result = await importService.processCatalogueUpload({
@@ -137,6 +169,10 @@ router.post('/upload', verifyAdminRole, async (req, res) => {
     res.status(201).json(result);
   } catch (err) {
     res.status(400).json({ error: err.message });
+  } finally {
+    if (tempPath && fs.existsSync(tempPath)) {
+      try { fs.unlinkSync(tempPath); } catch {}
+    }
   }
 });
 

@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { RequireAuth, RequireRole, RequireActiveRetailer } from './components/RouteGuards';
-import IntroSplash from './components/IntroSplash';
 
 // Layouts
 import AdminLayout from './layouts/AdminLayout';
@@ -34,13 +33,8 @@ import ProductRequest from './pages/retailer/ProductRequest';
 import Account from './pages/retailer/Account';
 
 function App() {
-  const [splashCompleted, setSplashCompleted] = useState(false);
-
   return (
     <AuthProvider>
-      {!splashCompleted && (
-        <IntroSplash onComplete={() => setSplashCompleted(true)} />
-      )}
       <BrowserRouter>
         <Routes>
           {/* Public Routes */}

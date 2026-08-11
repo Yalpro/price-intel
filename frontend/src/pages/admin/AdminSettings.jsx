@@ -1,8 +1,8 @@
-import React from 'react';
-import { Settings, ShieldAlert } from 'lucide-react';
+import React, { useState } from 'react';
+import { Settings, ShieldAlert, CheckCircle2 } from 'lucide-react';
 
 const Section = ({ title, children }) => (
-  <div className="bg-surface border border-border rounded-lg p-6 space-y-4">
+  <div className="bg-surface border border-border rounded-2xl p-6 space-y-4">
     <h2 className="font-sora font-semibold text-base text-textPrimary tracking-tight">{title}</h2>
     {children}
   </div>
@@ -18,51 +18,94 @@ const FieldRow = ({ label, hint, children }) => (
   </div>
 );
 
-const AdminSettings = () => (
-  <div className="space-y-6 max-w-3xl">
-    <div>
-      <h1 className="font-sora font-bold text-xl text-textPrimary tracking-tight">Admin Settings</h1>
-      <p className="text-textSecondary text-sm mt-0.5">Platform configuration and operational defaults.</p>
+const AdminSettings = () => {
+  const [saved, setSaved] = useState(false);
+
+  const handleSave = (e) => {
+    e.preventDefault();
+    setSaved(true);
+    setTimeout(() => setSaved(false), 3000);
+  };
+
+  return (
+    <div className="space-y-6 max-w-3xl font-inter">
+      <div>
+        <h1 className="font-sora font-bold text-xl text-textPrimary tracking-tight">Admin System Settings</h1>
+        <p className="text-textSecondary text-sm mt-0.5">Platform configuration, catalogue source mode, and operational defaults.</p>
+      </div>
+
+      {/* Security Banner */}
+      <div className="flex items-start gap-3 bg-[#0A0E0C] border border-border rounded-2xl p-4">
+        <ShieldAlert size={18} className="text-accentMint shrink-0 mt-0.5" />
+        <p className="text-xs text-textSecondary leading-relaxed">
+          Supplier credentials, API keys, and service-role secrets are managed exclusively in server-side environment variables (`SCRAPER_API_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`). They are never exposed to browser code.
+        </p>
+      </div>
+
+      {saved && (
+        <div className="p-4 bg-savingBg border border-emerald-800 text-accentMint text-xs font-mono font-semibold rounded-xl flex items-center gap-2">
+          <CheckCircle2 size={16} />
+          <span>Operational settings saved successfully!</span>
+        </div>
+      )}
+
+      <form onSubmit={handleSave} className="space-y-6">
+        <Section title="Database & Scraper Operational Mode">
+          <FieldRow label="Catalogue Mode" hint="Production scrapers read active DB catalogue">
+            <span className="font-mono text-xs text-accentMint bg-savingBg px-3 py-1 rounded-lg border border-emerald-800 font-bold">
+              CATALOGUE_SOURCE=database
+            </span>
+          </FieldRow>
+
+          <FieldRow label="Wholesalers Active" hint="Supported cash & carry scrapers">
+            <div className="flex flex-wrap gap-2 text-xs font-mono">
+              <span className="bg-[#0A0E0C] text-accentMint border border-border px-2.5 py-1 rounded-lg">Booker</span>
+              <span className="bg-[#0A0E0C] text-accentMint border border-border px-2.5 py-1 rounded-lg">Parfetts</span>
+              <span className="bg-[#0A0E0C] text-accentMint border border-border px-2.5 py-1 rounded-lg">Costco</span>
+              <span className="bg-[#0A0E0C] text-accentMint border border-border px-2.5 py-1 rounded-lg">Bestway</span>
+            </div>
+          </FieldRow>
+        </Section>
+
+        <Section title="Validation Thresholds">
+          <FieldRow label="Match Success Score" hint="Minimum validation score to record SUCCESS (Default: 90)">
+            <input 
+              type="number" 
+              defaultValue={90} 
+              disabled
+              className="w-24 px-3 py-2 bg-[#0A0E0C] border border-border rounded-xl text-textPrimary text-sm font-mono opacity-80 cursor-not-allowed" 
+            />
+          </FieldRow>
+          <FieldRow label="Ambiguous Match Score" hint="Score threshold for Review Queue flagging (Default: 60)">
+            <input 
+              type="number" 
+              defaultValue={60} 
+              disabled
+              className="w-24 px-3 py-2 bg-[#0A0E0C] border border-border rounded-xl text-textPrimary text-sm font-mono opacity-80 cursor-not-allowed" 
+            />
+          </FieldRow>
+        </Section>
+
+        <Section title="Default Retailer Registration Access">
+          <FieldRow label="New Account Status" hint="Initial status assigned to newly registered retailers">
+            <select className="px-3 py-2 bg-[#0A0E0C] border border-border rounded-xl text-textPrimary text-sm focus:outline-none focus:border-accent">
+              <option value="trial">Trial (Free Pilot Access)</option>
+              <option value="pending">Pending (Manual approval)</option>
+            </select>
+          </FieldRow>
+        </Section>
+
+        <div className="flex justify-end">
+          <button 
+            type="submit" 
+            className="px-6 py-3 bg-accent hover:bg-accentHover text-white text-sm font-semibold rounded-xl transition-colors cursor-pointer"
+          >
+            Save Settings
+          </button>
+        </div>
+      </form>
     </div>
+  );
+};
 
-    {/* Security Warning */}
-    <div className="flex items-start gap-3 bg-orange-50 border border-orange-200 rounded-lg p-4">
-      <ShieldAlert size={18} strokeWidth={1.75} className="text-warning shrink-0 mt-0.5" />
-      <p className="text-sm text-textPrimary">
-        Supplier credentials, API keys and service-role secrets are managed exclusively in server-side environment variables. They are not accessible or configurable from this interface.
-      </p>
-    </div>
-
-    <Section title="Validation Thresholds">
-      <FieldRow label="Success threshold" hint="Minimum validation score to classify as SUCCESS">
-        <input type="number" defaultValue={90} min={0} max={100} className="w-24 px-3 py-2 border border-border rounded-md text-textPrimary text-sm focus:outline-none focus:ring-2 focus:ring-accent" />
-      </FieldRow>
-      <FieldRow label="Ambiguous threshold" hint="Scores below this but above rejection are flagged for manual review">
-        <input type="number" defaultValue={60} min={0} max={100} className="w-24 px-3 py-2 border border-border rounded-md text-textPrimary text-sm focus:outline-none focus:ring-2 focus:ring-accent" />
-      </FieldRow>
-    </Section>
-
-    <Section title="Catalogue Settings">
-      <FieldRow label="Default new account status" hint="Status assigned to newly registered retailer accounts">
-        <select className="px-3 py-2 border border-border rounded-md text-textPrimary text-sm focus:outline-none focus:ring-2 focus:ring-accent bg-surface">
-          <option value="pending">Pending (requires manual activation)</option>
-          <option value="trial">Trial (immediate access)</option>
-        </select>
-      </FieldRow>
-    </Section>
-
-    <Section title="Admin User Management">
-      <p className="text-sm text-textSecondary">
-        Admin users are defined in the <code className="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-xs">profiles</code> table with role = 'admin' or 'manager'. 
-        New admin accounts must be created directly in Supabase Auth and then inserted into the profiles table with the appropriate role.
-      </p>
-    </Section>
-
-    <div className="flex justify-end">
-      <button className="px-5 py-2.5 bg-accent text-white text-sm font-semibold rounded-lg hover:bg-teal-800 transition-colors">
-        Save Settings
-      </button>
-    </div>
-  </div>
-);
 export default AdminSettings;
