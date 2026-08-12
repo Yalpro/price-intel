@@ -101,6 +101,9 @@ class ProductMetadataParser {
    */
   static extractQuantity(text) {
     if (!text) return null;
+    const caseMatch = text.match(/\bcase\s+of\s+(\d+)\b/i);
+    if (caseMatch) return parseInt(caseMatch[1], 10);
+
     const match = text.match(/\b(\d+)\s*(?:x|\*|pack|pk|cans|bottles)\b/i);
     return match ? parseInt(match[1], 10) : null;
   }

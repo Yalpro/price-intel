@@ -211,13 +211,48 @@ class BookerScraper extends BaseScraper {
           const packInfoEl = container.querySelector('ul > li');
           const packInfo = packInfoEl ? packInfoEl.innerText.trim() : null;
           
-          const textNodes = Array.from(container.querySelectorAll('*')).filter(el => el.children.length === 0 && el.innerText && el.innerText.includes('£'));
+          // Extract exact Booker product detail URL
+          const rawUrl = titleLink ? new URL(titleLink.href, 'https://www.booker.co.uk').href : `https://www.booker.co.uk/products/product?Code=${code}`;
+
+          // Extract canonical EX-VAT wholesale case price
           let price = null;
-          for (const node of textNodes) {
-            const match = node.innerText.match(/£([0-9]+\.[0-9]{2})/);
-            if (match && !node.innerText.toLowerCase().includes('incl. vat') && !node.innerText.toLowerCase().includes('was')) {
-               price = parseFloat(match[1]);
-               break;
+
+          // Strategy A: Find element containing 'incl. vat' / 'inc. vat' and inspect its previous element sibling
+          const vatEl = Array.from(container.querySelectorAll('*')).find(el => el.children.length === 0 && el.innerText && /incl\.?\s*vat/i.test(el.innerText));
+          if (vatEl) {
+            let prev = vatEl.previousElementSibling;
+            while (prev) {
+              const match = prev.innerText.match(/£\s*([0-9]+\.[0-9]{2})/);
+              if (match) {
+                price = parseFloat(match[1]);
+                break;
+              }
+              prev = prev.previousElementSibling;
+            }
+          }
+
+          // Strategy B: Fallback regex on container innerText for price preceding 'incl. VAT'
+          if (!price) {
+            const vatRegexMatch = container.innerText.match(/£\s*([0-9]+\.[0-9]{2})\s*(?:\n|\r|\s)*(?:£[0-9.]+\s*)?incl\.?\s*vat/i);
+            if (vatRegexMatch) {
+              price = parseFloat(vatRegexMatch[1]);
+            }
+          }
+
+          // Strategy C: Fallback for zero-rated VAT items (excluding PMP, RRP, WAS, SAVE)
+          if (!price) {
+            const textNodes = Array.from(container.querySelectorAll('*')).filter(el => {
+              if (el.children.length > 0 || !el.innerText || !el.innerText.includes('£')) return false;
+              const txt = el.innerText.toLowerCase();
+              return !txt.includes('was') && !txt.includes('save') && !txt.includes('rrp') && !txt.includes('pm') && !txt.includes('por') && !txt.includes('incl');
+            });
+
+            for (const node of textNodes) {
+              const match = node.innerText.match(/£\s*([0-9]+\.[0-9]{2})/);
+              if (match) {
+                price = parseFloat(match[1]);
+                break;
+              }
             }
           }
 
@@ -231,6 +266,7 @@ class BookerScraper extends BaseScraper {
             supplierProductId: code,
             rawTitle: title,
             rawBarcode: barcode,
+            rawUrl: rawUrl,
             rawPackInfo: packInfo,
             price: price,
             inStock: inStock,

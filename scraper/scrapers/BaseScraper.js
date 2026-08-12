@@ -566,24 +566,42 @@ class BaseScraper {
 
         if (rawError) throw new Error(`raw_products upsert failed: ${rawError.message}`);
 
-        const { data: snapData, error: snapError } = await supabase
-          .from('price_snapshots')
-          .insert({
-            canonical_product_id: null,
-            supplier_id: this.supplierRow.id,
-            raw_product_id: rawProduct.id,
-            case_price: finalResult.price,
-            unit_cost: null,
-            in_stock: finalResult.inStock,
-            promotion_flag: finalResult.promotionFlag || false,
-            snapshot_at: now,
-          })
-          .select('id')
-          .single();
+        // Extract case quantity and calculate normalized unit cost
+        const caseQuantity = ProductMetadataParser.extractQuantity(rawPackInfo) || ProductMetadataParser.extractQuantity(rawTitle) || 1;
+        const unitCost = (finalResult.price && caseQuantity > 0) ? parseFloat((finalResult.price / caseQuantity).toFixed(4)) : null;
 
-        if (snapError) throw new Error(`price_snapshots insert failed: ${snapError.message}`);
+        // DATA INTEGRITY GUARD: Check if extracted price is valid
+        // Reject cases where case_price <= 3.00 when caseQuantity > 1 (e.g. £1.50 or £1.99 extracted from PMP badge for a case of 24)
+        const isPriceInvalid = !finalResult.price || finalResult.price <= 0 || (caseQuantity > 1 && finalResult.price <= 3.00);
 
-        console.log(`[${this.supplierName}]   ✓ DB: raw_products.id=${rawProduct.id} → price_snapshots.id=${snapData.id} (raw_product_id linked)`);
+        if (isPriceInvalid) {
+          console.warn(`[${this.supplierName}]   ⚠ PRICE_VALIDATION_FAILED: Extracted price £${finalResult.price} is invalid for ${rawTitle} (Case qty: ${caseQuantity}). Snapshot skipped.`);
+          if (finalResult._logId) {
+            await supabase.from('product_search_logs').update({
+              result_status: 'rejected',
+              validation_reason: `PRICE_VALIDATION_FAILED: £${finalResult.price} invalid for case qty ${caseQuantity}`
+            }).eq('id', finalResult._logId);
+          }
+        } else {
+          const { data: snapData, error: snapError } = await supabase
+            .from('price_snapshots')
+            .insert({
+              canonical_product_id: null,
+              supplier_id: this.supplierRow.id,
+              raw_product_id: rawProduct.id,
+              case_price: finalResult.price,
+              unit_cost: unitCost,
+              in_stock: finalResult.inStock,
+              promotion_flag: finalResult.promotionFlag || false,
+              snapshot_at: now,
+            })
+            .select('id')
+            .single();
+
+          if (snapError) throw new Error(`price_snapshots insert failed: ${snapError.message}`);
+
+          console.log(`[${this.supplierName}]   ✓ DB: raw_products.id=${rawProduct.id} → price_snapshots.id=${snapData.id} (case: £${finalResult.price}, unit: £${unitCost})`);
+        }
 
         if (finalResult._logId) {
           const { error: logUpdateError } = await supabase
