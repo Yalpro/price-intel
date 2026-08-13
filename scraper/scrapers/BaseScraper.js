@@ -4,6 +4,8 @@ const { chromium } = require('playwright');
 const { createClient } = require('@supabase/supabase-js');
 const ProductMetadataParser = require('../utils/ProductMetadataParser');
 const GlobalMetadataLayer = require('../services/GlobalMetadataLayer');
+const CandidateResolverService = require('../services/CandidateResolverService');
+const SearchRecoveryService = require('../services/SearchRecoveryService');
 
 const supabase = createClient(
   process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL,
@@ -22,6 +24,8 @@ class BaseScraper {
     this.startTime = null;
     this.supplierRow = null;
     this.metadataLayer = new GlobalMetadataLayer();
+    this.candidateResolver = new CandidateResolverService({ scraper: this });
+    this.searchRecovery = new SearchRecoveryService({ candidateResolver: this.candidateResolver });
     this.isCancelled = false;
     this.cancellationReason = null;
     this.isFinalized = false;
@@ -507,6 +511,20 @@ class BaseScraper {
         evaluated = { result_status: 'error', validation_score: 0, validation_reason: errorMessage };
       } else {
         evaluated = this.validateCandidates(product, candidates, strategy.type);
+
+        // AMBIGUOUS AI RESOLUTION HOOK: If 2+ viable candidates remain and status is ambiguous, invoke CandidateResolverService
+        if (evaluated.result_status === 'ambiguous' && candidates.length >= 2) {
+          const aiResolution = await this.candidateResolver.resolveAmbiguous(product, candidates);
+          if (aiResolution.finalStatus === 'VERIFIED_EQUIVALENT' && aiResolution.recommendedCandidate) {
+            evaluated = {
+              ...aiResolution.recommendedCandidate,
+              result_status: 'success',
+              validation_score: 95,
+              validation_reason: `AI Resolved candidate "${aiResolution.recommendedCandidate.rawTitle}": ${aiResolution.reasoningSummary}`,
+              matched_fields: 'ai_resolved_equivalent'
+            };
+          }
+        }
       }
 
       console.log(`[${this.supplierName}]      Result: ${evaluated.result_status.toUpperCase()} (Score: ${evaluated.validation_score}) - ${evaluated.validation_reason}`);
@@ -546,11 +564,76 @@ class BaseScraper {
 
       if (evaluated.result_status === 'success') {
         finalResult = { ...evaluated, _logId: insertedLogId };
-        break; // Stop searching! We found it deterministically.
+        break; // Stop searching! We found it.
       }
 
       attemptNumber++;
       await this.delay(1000); // polite pause between attempts
+    }
+
+    // SEARCH RECOVERY HOOK: If normal search strategies produced zero results / not_found, invoke SearchRecoveryService
+    if (!finalResult && bestNonSuccessEvaluated?.result_status !== 'ambiguous' && bestNonSuccessEvaluated?.result_status !== 'rejected') {
+      const attemptedTerms = strategies.map(s => s.term);
+      const searchFn = async (queryText) => {
+        attemptNumber++;
+        const recStart = Date.now();
+        let recCandidates = [];
+        let recError = null;
+
+        try {
+          recCandidates = await this.executeSearch(page, queryText, 'ai_search_recovery');
+          if (!Array.isArray(recCandidates)) recCandidates = recCandidates ? [recCandidates] : [];
+        } catch (e) {
+          recError = e.message;
+        }
+
+        const recDuration = Date.now() - recStart;
+
+        await this.logSearchResult({
+          scraper_run_id: this.runId,
+          supplier_id: this.supplierRow.id,
+          source_catalogue_key: product.barcode || product.product_name,
+          barcode: product.barcode,
+          original_product_name: product.product_name,
+          attempt_number: attemptNumber,
+          search_strategy: 'ai_search_recovery',
+          searched_term: queryText,
+          result_status: recError ? 'error' : (recCandidates.length > 0 ? 'ambiguous' : 'not_found'),
+          validation_score: recCandidates.length > 0 ? 60 : 0,
+          validation_reason: recError || (recCandidates.length > 0 ? 'Recovery query returned candidates.' : 'Recovery query returned zero results.'),
+          candidate_count: recCandidates.length,
+          search_duration_ms: recDuration,
+          error_message: recError
+        });
+
+        return recCandidates;
+      };
+
+      const recoveryRes = await this.searchRecovery.recoverNotFoundItem(product, this.supplierName, {
+        previousAttempts: attemptedTerms,
+        searchFn
+      });
+
+      if (recoveryRes.finalStatus === 'VERIFIED_EQUIVALENT' && recoveryRes.recommendedCandidate) {
+        finalResult = {
+          ...recoveryRes.recommendedCandidate,
+          result_status: 'success',
+          validation_score: 95,
+          validation_reason: recoveryRes.reasoningSummary
+        };
+      } else if (recoveryRes.finalStatus === 'NEEDS_REVIEW') {
+        bestNonSuccessEvaluated = {
+          result_status: 'ambiguous',
+          validation_score: 70,
+          validation_reason: recoveryRes.reasoningSummary
+        };
+      } else {
+        bestNonSuccessEvaluated = {
+          result_status: 'not_found',
+          validation_score: 0,
+          validation_reason: recoveryRes.reasoningSummary || 'SEARCH_STRATEGY_EXHAUSTED'
+        };
+      }
     }
 
     if (finalResult) {
