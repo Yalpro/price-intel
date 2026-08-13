@@ -70,30 +70,26 @@ class CandidateResolverService {
     }
 
     // STEP 2: Invoke AI Candidate Resolver for remaining ambiguous candidates
-    const aiStart = Date.now();
-    let aiRes;
-    let aiCalled = false;
-
-    if (this.aiProvider && this.aiProvider.isConfigured()) {
-      aiCalled = true;
-      const candidateList = validCandidates.map(v => v.candidate);
-      aiRes = await this.aiProvider.resolveAmbiguousCandidate(productIdentity, candidateList);
-    } else {
-      aiRes = {
-        recommendedCandidateId: null,
-        confidence: 0,
-        reasoningSummary: 'AI provider not configured in backend environment.',
-        conflicts: ['AI_NOT_CONFIGURED'],
-        requiresHumanReview: true
+    if (!this.aiProvider || !this.aiProvider.isConfigured()) {
+      return {
+        finalStatus: 'NEEDS_REVIEW',
+        aiCalled: false,
+        recommendedCandidate: null,
+        aiConfidence: 0,
+        hardValidatorResult: 'AI_PROVIDER_NOT_CONFIGURED',
+        reasoningSummary: 'AI provider missing or not configured in backend environment.',
+        latencyMs: Date.now() - startTime
       };
     }
 
+    const candidateList = validCandidates.map(v => v.candidate);
+    const aiRes = await this.aiProvider.resolveAmbiguousCandidate(productIdentity, candidateList);
     const latencyMs = Date.now() - startTime;
 
     if (!aiRes.recommendedCandidateId) {
       return {
         finalStatus: 'NEEDS_REVIEW',
-        aiCalled,
+        aiCalled: true,
         recommendedCandidate: null,
         aiConfidence: aiRes.confidence || 0,
         hardValidatorResult: 'NO_RECOMMENDATION',
@@ -103,16 +99,16 @@ class CandidateResolverService {
     }
 
     // STEP 3: Find recommended candidate object
-    const selectedObj = candidates.find(c => String(c.id || c.code || c.supplierProductId || c.rawProductCode) === String(aiRes.recommendedCandidateId));
+    const selectedObj = candidateList.find(c => String(c.id || c.code || c.supplierProductId || c.rawProductCode) === String(aiRes.recommendedCandidateId));
 
     if (!selectedObj) {
       return {
         finalStatus: 'NEEDS_REVIEW',
-        aiCalled,
+        aiCalled: true,
         recommendedCandidate: null,
         aiConfidence: aiRes.confidence || 0,
-        hardValidatorResult: 'INVALID_CANDIDATE_ID',
-        reasoningSummary: `Recommended candidate ID "${aiRes.recommendedCandidateId}" not found in candidate set.`,
+        hardValidatorResult: 'INVALID_CANDIDATE_ID_RETURNED',
+        reasoningSummary: `AI returned candidate ID "${aiRes.recommendedCandidateId}" not found in candidate set.`,
         latencyMs
       };
     }
@@ -123,7 +119,7 @@ class CandidateResolverService {
     if (postEval.result_status === 'rejected' || postEval.validation_score < 90) {
       return {
         finalStatus: 'NEEDS_REVIEW',
-        aiCalled,
+        aiCalled: true,
         recommendedCandidate: selectedObj,
         aiConfidence: aiRes.confidence || 0,
         hardValidatorResult: `FAIL (${postEval.conflicting_fields || 'SCORE_BELOW_90'})`,
@@ -142,7 +138,7 @@ class CandidateResolverService {
     if ((csvBrand && !candBrand) || (csvVol && !candVol)) {
       return {
         finalStatus: 'NEEDS_REVIEW',
-        aiCalled,
+        aiCalled: true,
         recommendedCandidate: selectedObj,
         aiConfidence: aiRes.confidence || 0,
         hardValidatorResult: 'FAIL_INCOMPLETE_METADATA',
@@ -154,7 +150,7 @@ class CandidateResolverService {
     // STEP 5: PROMOTED TO VERIFIED_EQUIVALENT
     return {
       finalStatus: 'VERIFIED_EQUIVALENT',
-      aiCalled,
+      aiCalled: true,
       recommendedCandidate: selectedObj,
       aiConfidence: aiRes.confidence || 0,
       hardValidatorResult: 'PASS_POST_AI_HARD_VALIDATION',
