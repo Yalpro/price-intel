@@ -207,6 +207,25 @@ class ProductMetadataParser {
   }
 
   /**
+   * Extracts normalized Price Mark (PMP/PM) in pounds.
+   * Examples: "PM150" -> "1.50", "PM £1.50" -> "1.50", "PM200" -> "2.00", "PM89" -> "0.89".
+   */
+  static extractPriceMark(text) {
+    if (!text) return null;
+    const match = text.match(/\b(?:PM|PMP)\s*£?\s*(\d+(?:\.\d{1,2})?|\d{2,4})\b/i);
+    if (!match) return null;
+    let valStr = match[1];
+    if (valStr.includes('.')) {
+      return parseFloat(valStr).toFixed(2);
+    }
+    const valNum = parseInt(valStr, 10);
+    if (valNum >= 50 && valNum <= 999) {
+      return (valNum / 100).toFixed(2);
+    }
+    return valNum.toFixed(2);
+  }
+
+  /**
    * Normalizes core product title by stripping volume, weight, pack, PM pricing marks, container descriptors (bar, can, bottle), filler words (original, taste, pm, pmp), and brand.
    */
   static normalizeCoreTitle(text) {

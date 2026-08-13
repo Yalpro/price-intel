@@ -298,19 +298,26 @@ class BaseScraper {
   }
 
   evaluateCandidate(csvProduct, candidate, strategy) {
+    // PHASE 3: Strict barcode vs product code separation
+    let candidateBarcode = null;
+    let candidateProductCode = candidate.supplierProductId || candidate.rawProductCode || null;
+
+    if (candidate.rawBarcode && String(candidate.rawBarcode).replace(/\D/g, '').length >= 8) {
+      candidateBarcode = ProductMetadataParser.normalizeBarcode(candidate.rawBarcode);
+    }
+
     const csvBarcode = ProductMetadataParser.normalizeBarcode(csvProduct.barcode);
-    const candidateBarcode = ProductMetadataParser.normalizeBarcode(candidate.rawBarcode);
 
     // 1. Barcode check
     if (csvBarcode && candidateBarcode) {
       if (csvBarcode === candidateBarcode) {
-        return { result_status: 'success', validation_score: 100, validation_reason: 'Exact normalized barcode match.', matched_fields: 'barcode' };
-      } else if (candidateBarcode.length > 7) {
+        return { result_status: 'success', validation_score: 100, validation_reason: 'Exact normalized barcode match.', matched_fields: 'barcode', rawProductCode: candidateProductCode, rawBarcode: candidateBarcode };
+      } else {
         return { result_status: 'rejected', validation_score: 0, validation_reason: `Conflicting barcode: Expected ${csvBarcode}, got ${candidateBarcode}.`, conflicting_fields: 'barcode' };
       }
     }
 
-    // 2. Metadata check
+    // 2. Metadata extraction
     const csvName = csvProduct.product_name;
     const candName = candidate.rawTitle || '';
 
@@ -318,10 +325,10 @@ class BaseScraper {
     const candBrand = ProductMetadataParser.extractBrand(candName);
 
     const csvVol = ProductMetadataParser.extractVolume(csvName);
-    const candVol = ProductMetadataParser.extractVolume(candName);
+    const candVol = ProductMetadataParser.extractVolume(candName) || ProductMetadataParser.extractVolume(candidate.rawPackInfo);
 
     const csvWeight = ProductMetadataParser.extractWeight(csvName);
-    const candWeight = ProductMetadataParser.extractWeight(candName);
+    const candWeight = ProductMetadataParser.extractWeight(candName) || ProductMetadataParser.extractWeight(candidate.rawPackInfo);
 
     const csvPack = ProductMetadataParser.extractPackSize(csvName);
     const candPack = ProductMetadataParser.extractPackSize(candName) || ProductMetadataParser.extractPackSize(candidate.rawPackInfo);
@@ -332,19 +339,45 @@ class BaseScraper {
     const csvVar = ProductMetadataParser.extractVariant(csvName);
     const candVar = ProductMetadataParser.extractVariant(candName);
 
+    const csvPM = ProductMetadataParser.extractPriceMark(csvName);
+    const candPM = ProductMetadataParser.extractPriceMark(candName);
+
     const conflicts = [];
     const matched = [];
 
-    // Conflict detection (Strict rejections)
+    // HARD CONFLICT 1: Brand mismatch
     if (csvBrand && candBrand && csvBrand !== candBrand) conflicts.push('brand');
+
+    // HARD CONFLICT 2: Volume mismatch
     if (csvVol && candVol && csvVol !== candVol) conflicts.push('volume');
+
+    // HARD CONFLICT 3: Weight mismatch
     if (csvWeight && candWeight && csvWeight !== candWeight) conflicts.push('weight');
-    if (csvPack && candPack && csvPack !== candPack && (!csvQty || !candQty || csvQty !== candQty)) conflicts.push('pack');
+
+    // HARD CONFLICT 4: Pack size / Quantity mismatch (Single item mapped to multipack)
     if (csvQty && candQty && csvQty !== candQty && !conflicts.includes('pack')) conflicts.push('pack');
+    if (candQty && candQty > 1 && (!csvQty || csvQty !== candQty) && (candName.toLowerCase().includes('pack') || candName.toLowerCase().includes('pk') || (candidate.rawPackInfo && candidate.rawPackInfo.toLowerCase().includes('pack')))) {
+      if (!conflicts.includes('pack')) conflicts.push('pack');
+    }
+
+    // HARD CONFLICT 5: Variant / Flavour mismatch
     if (csvVar && candVar && csvVar !== candVar) conflicts.push('variant');
+    if (!csvVar && candVar && ['zero', 'diet', 'cherry', 'mango', 'tropical', 'strawberry', 'banana', 'peach', 'lime'].includes(candVar)) {
+      if (!conflicts.includes('variant')) conflicts.push('variant');
+    }
+
+    // HARD CONFLICT 6: PMP / Price Mark mismatch
+    if (csvPM && candPM && Math.abs(parseFloat(csvPM) - parseFloat(candPM)) > 0.05) {
+      conflicts.push('price_mark');
+    }
 
     if (conflicts.length > 0) {
-      return { result_status: 'rejected', validation_score: 0, validation_reason: `Metadata conflicts detected: ${conflicts.join(', ')}.`, conflicting_fields: conflicts.join(',') };
+      return {
+        result_status: 'rejected',
+        validation_score: 0,
+        validation_reason: `Strict metadata conflicts detected: ${conflicts.join(', ')}.`,
+        conflicting_fields: conflicts.join(',')
+      };
     }
 
     // Match detection (Only explicit matches count)
