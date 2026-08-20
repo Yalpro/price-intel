@@ -5,7 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node tests/test_immutable_identity_and_pack_regression.cjs"
+    "test": "node tests/test_immutable_identity_and_pack_regression.cjs && node tests/test_retailer_api_live.cjs"
   },
   "keywords": [],
   "author": "",

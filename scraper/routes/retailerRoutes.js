@@ -45,7 +45,6 @@ async function getVerifiedRawProductIds() {
  */
 function packCompatibilityKey(packMeta) {
   const units = packMeta.unitsPerPack || 1;
-  // If unit size is unknown, mark as 'unknown' — never compatible with a known size
   let size = 'unknown';
   if (packMeta.unitSize) {
     size = String(packMeta.unitSize).toLowerCase().replace(/\s+/g, '');
@@ -83,7 +82,7 @@ router.get('/autocomplete', async (req, res) => {
 
     let catQuery = supabase
       .from('catalogue_items')
-      .select('id, barcode, name, category, source_price_mark')
+      .select('id, barcode, name, source_price_mark')
       .eq('version_id', activeVer.id);
 
     if (isBarcode) {
@@ -102,23 +101,22 @@ router.get('/autocomplete', async (req, res) => {
 
     const { data: rawProds } = await supabase
       .from('raw_products')
-      .select('id, raw_barcode, raw_image_url, suppliers(name)')
+      .select('id, raw_barcode, suppliers(name)')
       .in('raw_barcode', barcodes)
       .in('id', Array.from(verifiedRawIds));
 
-    const { data: snaps } = await supabase
+    const rawIds = (rawProds || []).map(r => r.id);
+    const { data: snaps } = rawIds.length > 0 ? await supabase
       .from('price_snapshots')
       .select('raw_product_id, case_price')
-      .in('raw_product_id', (rawProds || []).map(r => r.id));
+      .in('raw_product_id', rawIds) : { data: [] };
 
     const suggestions = catItems.slice(0, 10).map(item => {
       const itemRaws = (rawProds || []).filter(r => r.raw_barcode === item.barcode);
       let bestPrice = null;
       let bestSupplier = null;
-      let imageUrl = null;
 
       for (const r of itemRaws) {
-        if (r.raw_image_url && !imageUrl) imageUrl = r.raw_image_url;
         const snap = (snaps || []).find(s => s.raw_product_id === r.id);
         if (snap && snap.case_price > 0) {
           const p = parseFloat(snap.case_price);
@@ -133,11 +131,11 @@ router.get('/autocomplete', async (req, res) => {
         id: item.id,
         name: item.name,
         barcode: item.barcode,
-        category: item.category || 'General Wholesale',
+        category: 'General Wholesale',
         priceMark: item.source_price_mark,
         bestPrice,
         bestSupplier,
-        imageUrl: imageUrl || null
+        imageUrl: null
       };
     });
 
@@ -151,7 +149,6 @@ router.get('/autocomplete', async (req, res) => {
 // 2. GET /api/retailer/search?q=query
 router.get('/search', async (req, res) => {
   const searchTerm = (req.query.q || '').trim();
-  const categoryFilter = req.query.category || null;
 
   try {
     const { data: activeVer } = await supabase
@@ -167,7 +164,7 @@ router.get('/search', async (req, res) => {
 
     let catQuery = supabase
       .from('catalogue_items')
-      .select('id, barcode, name, category, source_price_mark')
+      .select('id, barcode, name, source_price_mark')
       .eq('version_id', activeVer.id);
 
     if (searchTerm) {
@@ -176,10 +173,6 @@ router.get('/search', async (req, res) => {
       } else {
         catQuery = catQuery.ilike('name', `%${cleanTerm}%`);
       }
-    }
-
-    if (categoryFilter && categoryFilter !== 'All') {
-      catQuery = catQuery.ilike('category', `%${categoryFilter}%`);
     }
 
     const { data: catItems } = await catQuery.limit(50);
@@ -192,27 +185,25 @@ router.get('/search', async (req, res) => {
 
     const { data: rawProds } = await supabase
       .from('raw_products')
-      .select('id, supplier_id, raw_title, raw_barcode, raw_product_code, raw_url, raw_pack_info, raw_image_url, suppliers(id, name)')
+      .select('id, supplier_id, raw_title, raw_barcode, raw_product_code, raw_url, raw_pack_info, suppliers(id, name)')
       .in('raw_barcode', barcodes)
       .in('id', Array.from(verifiedRawIds));
 
     const rawIds = (rawProds || []).map(r => r.id);
 
-    const { data: snapshots } = await supabase
+    const { data: snapshots } = rawIds.length > 0 ? await supabase
       .from('price_snapshots')
       .select('id, raw_product_id, case_price, unit_cost, in_stock, snapshot_at')
       .in('raw_product_id', rawIds)
-      .order('snapshot_at', { ascending: false });
+      .order('snapshot_at', { ascending: false }) : { data: [] };
 
     const searchResultsList = [];
 
     for (const catItem of catItems) {
       const matchedRaws = (rawProds || []).filter(r => r.raw_barcode === catItem.barcode);
       const supplierPrices = [];
-      let imageUrl = null;
 
       for (const raw of matchedRaws) {
-        if (raw.raw_image_url && !imageUrl) imageUrl = raw.raw_image_url;
         // PACK-SAFE: use only the LATEST snapshot for THIS raw_product_id
         const snap = (snapshots || []).find(s => s.raw_product_id === raw.id);
         if (snap && snap.case_price > 0) {
@@ -244,17 +235,19 @@ router.get('/search', async (req, res) => {
       supplierPrices.sort((a, b) => a.casePrice - b.casePrice);
       const cheapest = supplierPrices.length > 0 ? supplierPrices[0] : null;
 
-      searchResultsList.push({
-        id: catItem.id,
-        barcode: catItem.barcode,
-        name: catItem.name,
-        category: catItem.category || 'General Wholesale',
-        priceMark: catItem.source_price_mark,
-        imageUrl,
-        cheapest,
-        supplierCount: supplierPrices.length,
-        allPrices: supplierPrices
-      });
+      if (supplierPrices.length > 0) {
+        searchResultsList.push({
+          id: catItem.id,
+          barcode: catItem.barcode,
+          name: catItem.name,
+          category: 'General Wholesale',
+          priceMark: catItem.source_price_mark,
+          imageUrl: null,
+          cheapest,
+          supplierCount: supplierPrices.length,
+          allPrices: supplierPrices
+        });
+      }
     }
 
     searchResultsList.sort((a, b) => {
@@ -277,7 +270,6 @@ router.get('/search', async (req, res) => {
 // Cross-pack offers are marked as 'incompatible_pack' and excluded from savings.
 router.get('/deals', async (req, res) => {
   try {
-    const category = req.query.category || null;
     const supplierFilter = req.query.supplier || null;
     const sortBy = req.query.sortBy || 'saving_desc';
 
@@ -291,12 +283,8 @@ router.get('/deals', async (req, res) => {
 
     let catQuery = supabase
       .from('catalogue_items')
-      .select('id, barcode, name, category, source_price_mark')
+      .select('id, barcode, name, source_price_mark')
       .eq('version_id', activeVer.id);
-
-    if (category && category !== 'All') {
-      catQuery = catQuery.ilike('category', `%${category}%`);
-    }
 
     const { data: catItems } = await catQuery;
     if (!catItems || catItems.length === 0) {
@@ -308,17 +296,17 @@ router.get('/deals', async (req, res) => {
 
     const { data: rawProds } = await supabase
       .from('raw_products')
-      .select('id, supplier_id, raw_title, raw_barcode, raw_product_code, raw_url, raw_pack_info, raw_image_url, suppliers(id, name)')
+      .select('id, supplier_id, raw_title, raw_barcode, raw_product_code, raw_url, raw_pack_info, suppliers(id, name)')
       .in('raw_barcode', barcodes)
       .in('id', Array.from(verifiedRawIds));
 
     const rawIds = (rawProds || []).map(r => r.id);
 
-    const { data: snapshots } = await supabase
+    const { data: snapshots } = rawIds.length > 0 ? await supabase
       .from('price_snapshots')
       .select('id, raw_product_id, case_price, unit_cost, in_stock, snapshot_at')
       .in('raw_product_id', rawIds)
-      .order('snapshot_at', { ascending: false });
+      .order('snapshot_at', { ascending: false }) : { data: [] };
 
     const now = new Date();
     const dealsList = [];
@@ -326,10 +314,8 @@ router.get('/deals', async (req, res) => {
     for (const catItem of catItems) {
       const matchedRaws = (rawProds || []).filter(r => r.raw_barcode === catItem.barcode);
       const allOffers = [];
-      let imageUrl = null;
 
       for (const raw of matchedRaws) {
-        if (raw.raw_image_url && !imageUrl) imageUrl = raw.raw_image_url;
         // PACK-SAFE: use only the LATEST snapshot for THIS raw_product_id
         const snap = (snapshots || []).find(s => s.raw_product_id === raw.id);
         if (snap && snap.case_price > 0) {
@@ -378,11 +364,13 @@ router.get('/deals', async (req, res) => {
       const groups = Object.values(packGroups);
       groups.sort((a, b) => {
         if (b.length !== a.length) return b.length - a.length;
-        const minA = Math.min(...a.map(o => o.unitPrice));
-        const minB = Math.min(...b.map(o => o.unitPrice));
+        const minA = Math.min(...a.map(o => o.unitPrice || 999));
+        const minB = Math.min(...b.map(o => o.unitPrice || 999));
         return minA - minB;
       });
-      const dominantGroup = groups[0];
+      const dominantGroup = groups[0] || [];
+
+      if (dominantGroup.length === 0) continue;
 
       dominantGroup.sort((a, b) => a.casePrice - b.casePrice);
       const cheapest = dominantGroup[0];
@@ -416,9 +404,9 @@ router.get('/deals', async (req, res) => {
         id: catItem.id,
         barcode: catItem.barcode,
         name: catItem.name,
-        category: catItem.category || 'Soft Drinks',
+        category: 'General Wholesale',
         priceMark: catItem.source_price_mark,
-        imageUrl,
+        imageUrl: null,
         cheapestSupplier: cheapest.supplier,
         cheapestPrice: cheapest.casePrice,
         cheapestUnitPrice: cheapest.unitPrice,
@@ -471,26 +459,23 @@ router.get('/product/:id', async (req, res) => {
 
     const { data: rawProds } = await supabase
       .from('raw_products')
-      .select('id, supplier_id, raw_title, raw_barcode, raw_product_code, raw_url, raw_pack_info, raw_image_url, suppliers(id, name)')
+      .select('id, supplier_id, raw_title, raw_barcode, raw_product_code, raw_url, raw_pack_info, suppliers(id, name)')
       .eq('raw_barcode', item.barcode)
       .in('id', Array.from(verifiedRawIds));
 
     const rawIds = (rawProds || []).map(r => r.id);
 
     // Fetch ALL snapshots for ALL matched raw_products, ordered newest first
-    const { data: snapshots } = await supabase
+    const { data: snapshots } = rawIds.length > 0 ? await supabase
       .from('price_snapshots')
       .select('*')
       .in('raw_product_id', rawIds)
-      .order('snapshot_at', { ascending: false });
+      .order('snapshot_at', { ascending: false }) : { data: [] };
 
     const supplierOffers = [];
-    let imageUrl = null;
     const now = Date.now();
 
     for (const raw of (rawProds || [])) {
-      if (raw.raw_image_url && !imageUrl) imageUrl = raw.raw_image_url;
-
       // PACK-SAFE: filter snapshots STRICTLY by this raw_product_id
       // This is the authoritative history identity — never mixed with other raw_products
       const rawSnaps = (snapshots || []).filter(s => s.raw_product_id === raw.id);
@@ -558,9 +543,9 @@ router.get('/product/:id', async (req, res) => {
         id: item.id,
         barcode: item.barcode,
         name: item.name,
-        category: item.category || 'General Wholesale',
+        category: 'General Wholesale',
         priceMark: item.source_price_mark,
-        imageUrl,
+        imageUrl: null,
         offers: supplierOffers
       }
     });
@@ -598,12 +583,12 @@ router.get('/product/:id/history', async (req, res) => {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - days);
 
-    const { data: snapshots } = await supabase
+    const { data: snapshots } = rawIds.length > 0 ? await supabase
       .from('price_snapshots')
       .select('id, raw_product_id, case_price, unit_cost, snapshot_at')
       .in('raw_product_id', rawIds)
       .gte('snapshot_at', cutoffDate.toISOString())
-      .order('snapshot_at', { ascending: true });
+      .order('snapshot_at', { ascending: true }) : { data: [] };
 
     // PACK-SAFE: build per-raw_product series — NEVER a flat merged array
     // Each series is tagged with its pack identity for correct UI labelling
@@ -636,547 +621,6 @@ router.get('/product/:id/history', async (req, res) => {
     const seriesList = Object.values(seriesMap).filter(s => s.points.length > 0);
 
     res.json({ success: true, series: seriesList });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-module.exports = router;
-
-
-
-/**
- * Helper: Retrieve set of raw_product_ids that pass the Retailer Data Safety Gate
- */
-async function getVerifiedRawProductIds() {
-  const [logsRes, decsRes] = await Promise.all([
-    supabase
-      .from('product_search_logs')
-      .select('raw_product_id')
-      .in('result_status', ['verified_exact', 'verified_equivalent', 'success']),
-    supabase
-      .from('admin_review_decisions')
-      .select('raw_product_id')
-      .eq('decision', 'ADMIN_ACCEPTED')
-      .eq('is_current', true)
-  ]);
-
-  const ids = new Set();
-  (logsRes.data || []).forEach(l => l.raw_product_id && ids.add(l.raw_product_id));
-  (decsRes.data || []).forEach(d => d.raw_product_id && ids.add(d.raw_product_id));
-
-  return ids;
-}
-
-// 1. GET /api/retailer/autocomplete?q=query
-router.get('/autocomplete', async (req, res) => {
-  const searchTerm = (req.query.q || '').trim();
-  if (!searchTerm || searchTerm.length < 2) {
-    return res.json({ success: true, suggestions: [] });
-  }
-
-  try {
-    const { data: activeVer } = await supabase
-      .from('catalogue_versions')
-      .select('id')
-      .eq('is_active', true)
-      .single();
-
-    if (!activeVer) return res.json({ success: true, suggestions: [] });
-
-    const cleanTerm = searchTerm.toLowerCase();
-    const isBarcode = /^\d{7,18}$/.test(cleanTerm);
-
-    let catQuery = supabase
-      .from('catalogue_items')
-      .select('id, barcode, name, category, source_price_mark')
-      .eq('version_id', activeVer.id);
-
-    if (isBarcode) {
-      catQuery = catQuery.eq('barcode', cleanTerm);
-    } else {
-      catQuery = catQuery.ilike('name', `%${cleanTerm}%`);
-    }
-
-    const { data: catItems } = await catQuery.limit(20);
-    if (!catItems || catItems.length === 0) {
-      return res.json({ success: true, suggestions: [] });
-    }
-
-    const verifiedRawIds = await getVerifiedRawProductIds();
-    const barcodes = catItems.map(c => c.barcode).filter(Boolean);
-
-    const { data: rawProds } = await supabase
-      .from('raw_products')
-      .select('id, raw_barcode, raw_image_url, suppliers(name)')
-      .in('raw_barcode', barcodes)
-      .in('id', Array.from(verifiedRawIds));
-
-    const { data: snaps } = await supabase
-      .from('price_snapshots')
-      .select('raw_product_id, case_price')
-      .in('raw_product_id', (rawProds || []).map(r => r.id));
-
-    const suggestions = catItems.slice(0, 10).map(item => {
-      const itemRaws = (rawProds || []).filter(r => r.raw_barcode === item.barcode);
-      let bestPrice = null;
-      let bestSupplier = null;
-      let imageUrl = null;
-
-      for (const r of itemRaws) {
-        if (r.raw_image_url && !imageUrl) imageUrl = r.raw_image_url;
-        const snap = (snaps || []).find(s => s.raw_product_id === r.id);
-        if (snap && snap.case_price > 0) {
-          const p = parseFloat(snap.case_price);
-          if (bestPrice === null || p < bestPrice) {
-            bestPrice = p;
-            bestSupplier = r.suppliers?.name?.toUpperCase() || 'WHOLESALER';
-          }
-        }
-      }
-
-      return {
-        id: item.id,
-        name: item.name,
-        barcode: item.barcode,
-        category: item.category || 'General Wholesale',
-        priceMark: item.source_price_mark,
-        bestPrice,
-        bestSupplier,
-        imageUrl: imageUrl || null
-      };
-    });
-
-    return res.json({ success: true, suggestions });
-  } catch (err) {
-    console.error('[Retailer API] Autocomplete error:', err.message);
-    res.status(500).json({ success: false, error: err.message, suggestions: [] });
-  }
-});
-
-// 2. GET /api/retailer/search?q=query
-router.get('/search', async (req, res) => {
-  const searchTerm = (req.query.q || '').trim();
-  const categoryFilter = req.query.category || null;
-
-  try {
-    const { data: activeVer } = await supabase
-      .from('catalogue_versions')
-      .select('id, version_name')
-      .eq('is_active', true)
-      .single();
-
-    if (!activeVer) return res.json({ success: true, results: [] });
-
-    const cleanTerm = searchTerm.toLowerCase();
-    const isBarcode = /^\d{7,18}$/.test(cleanTerm);
-
-    let catQuery = supabase
-      .from('catalogue_items')
-      .select('id, barcode, name, category, source_price_mark')
-      .eq('version_id', activeVer.id);
-
-    if (searchTerm) {
-      if (isBarcode) {
-        catQuery = catQuery.eq('barcode', cleanTerm);
-      } else {
-        catQuery = catQuery.ilike('name', `%${cleanTerm}%`);
-      }
-    }
-
-    if (categoryFilter && categoryFilter !== 'All') {
-      catQuery = catQuery.ilike('category', `%${categoryFilter}%`);
-    }
-
-    const { data: catItems } = await catQuery.limit(50);
-    if (!catItems || catItems.length === 0) {
-      return res.json({ success: true, results: [] });
-    }
-
-    const verifiedRawIds = await getVerifiedRawProductIds();
-    const barcodes = catItems.map(c => c.barcode).filter(Boolean);
-
-    const { data: rawProds } = await supabase
-      .from('raw_products')
-      .select('id, supplier_id, raw_title, raw_barcode, raw_product_code, raw_url, raw_pack_info, raw_image_url, suppliers(id, name)')
-      .in('raw_barcode', barcodes)
-      .in('id', Array.from(verifiedRawIds));
-
-    const rawIds = (rawProds || []).map(r => r.id);
-
-    const { data: snapshots } = await supabase
-      .from('price_snapshots')
-      .select('id, raw_product_id, case_price, unit_cost, in_stock, snapshot_at')
-      .in('raw_product_id', rawIds)
-      .order('snapshot_at', { ascending: false });
-
-    const searchResultsList = [];
-
-    for (const catItem of catItems) {
-      const matchedRaws = (rawProds || []).filter(r => r.raw_barcode === catItem.barcode);
-      const supplierPrices = [];
-      let imageUrl = null;
-
-      for (const raw of matchedRaws) {
-        if (raw.raw_image_url && !imageUrl) imageUrl = raw.raw_image_url;
-        const snap = (snapshots || []).find(s => s.raw_product_id === raw.id);
-        if (snap && snap.case_price > 0) {
-          const casePrice = parseFloat(snap.case_price);
-          const packMeta = ProductMetadataParser.parseCanonicalPack(raw.raw_title, raw.raw_pack_info, casePrice);
-          const metrics = ProductMetadataParser.calculateNormalizedMetrics(casePrice, packMeta.unitsPerPack, packMeta.totalVolumeLitres);
-
-          supplierPrices.push({
-            supplier: raw.suppliers?.name?.toUpperCase() || 'WHOLESALER',
-            supplierId: raw.supplier_id,
-            casePrice: metrics.casePrice,
-            unitPrice: metrics.unitPrice,
-            unitsPerPack: packMeta.unitsPerPack,
-            unitSize: packMeta.unitSize,
-            pmpValue: packMeta.pmpValue,
-            isPriceMarked: packMeta.isPriceMarked,
-            supplierCode: raw.raw_product_code,
-            supplierUrl: raw.raw_url,
-            inStock: snap.in_stock !== false,
-            scrapedAt: snap.snapshot_at,
-            packInfo: raw.raw_pack_info
-          });
-        }
-      }
-
-      supplierPrices.sort((a, b) => a.casePrice - b.casePrice);
-      const cheapest = supplierPrices.length > 0 ? supplierPrices[0] : null;
-
-      searchResultsList.push({
-        id: catItem.id,
-        barcode: catItem.barcode,
-        name: catItem.name,
-        category: catItem.category || 'General Wholesale',
-        priceMark: catItem.source_price_mark,
-        imageUrl,
-        cheapest,
-        supplierCount: supplierPrices.length,
-        allPrices: supplierPrices
-      });
-    }
-
-    searchResultsList.sort((a, b) => {
-      if (a.cheapest && b.cheapest) return a.cheapest.casePrice - b.cheapest.casePrice;
-      if (a.cheapest) return -1;
-      if (b.cheapest) return 1;
-      return 0;
-    });
-
-    return res.json({ success: true, results: searchResultsList });
-  } catch (err) {
-    console.error('[Retailer API] Search error:', err.message);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// 3. GET /api/retailer/deals
-router.get('/deals', async (req, res) => {
-  try {
-    const category = req.query.category || null;
-    const supplierFilter = req.query.supplier || null;
-    const sortBy = req.query.sortBy || 'saving_desc';
-
-    const { data: activeVer } = await supabase
-      .from('catalogue_versions')
-      .select('id')
-      .eq('is_active', true)
-      .single();
-
-    if (!activeVer) return res.json({ success: true, deals: [] });
-
-    let catQuery = supabase
-      .from('catalogue_items')
-      .select('id, barcode, name, category, source_price_mark')
-      .eq('version_id', activeVer.id);
-
-    if (category && category !== 'All') {
-      catQuery = catQuery.ilike('category', `%${category}%`);
-    }
-
-    const { data: catItems } = await catQuery;
-    if (!catItems || catItems.length === 0) {
-      return res.json({ success: true, deals: [] });
-    }
-
-    const verifiedRawIds = await getVerifiedRawProductIds();
-    const barcodes = catItems.map(c => c.barcode).filter(Boolean);
-
-    const { data: rawProds } = await supabase
-      .from('raw_products')
-      .select('id, supplier_id, raw_title, raw_barcode, raw_product_code, raw_url, raw_pack_info, raw_image_url, suppliers(id, name)')
-      .in('raw_barcode', barcodes)
-      .in('id', Array.from(verifiedRawIds));
-
-    const rawIds = (rawProds || []).map(r => r.id);
-
-    const { data: snapshots } = await supabase
-      .from('price_snapshots')
-      .select('id, raw_product_id, case_price, unit_cost, in_stock, snapshot_at')
-      .in('raw_product_id', rawIds)
-      .order('snapshot_at', { ascending: false });
-
-    const now = new Date();
-    const dealsList = [];
-
-    for (const catItem of catItems) {
-      const matchedRaws = (rawProds || []).filter(r => r.raw_barcode === catItem.barcode);
-      const supplierPrices = [];
-      let imageUrl = null;
-
-      for (const raw of matchedRaws) {
-        if (raw.raw_image_url && !imageUrl) imageUrl = raw.raw_image_url;
-        const snap = (snapshots || []).find(s => s.raw_product_id === raw.id);
-        if (snap && snap.case_price > 0) {
-          const casePrice = parseFloat(snap.case_price);
-          const packMeta = ProductMetadataParser.parseCanonicalPack(raw.raw_title, raw.raw_pack_info, casePrice);
-          const metrics = ProductMetadataParser.calculateNormalizedMetrics(casePrice, packMeta.unitsPerPack, packMeta.totalVolumeLitres);
-
-          const snapDate = new Date(snap.snapshot_at);
-          const ageHours = (now.getTime() - snapDate.getTime()) / (1000 * 3600);
-          let freshness = 'FRESH';
-          if (ageHours > 72) freshness = 'STALE';
-          else if (ageHours > 24) freshness = 'AGING';
-
-          supplierPrices.push({
-            supplier: raw.suppliers?.name?.toUpperCase() || 'WHOLESALER',
-            supplierId: raw.supplier_id,
-            casePrice: metrics.casePrice,
-            unitPrice: metrics.unitPrice,
-            unitsPerPack: packMeta.unitsPerPack,
-            unitSize: packMeta.unitSize,
-            supplierCode: raw.raw_product_code,
-            supplierUrl: raw.raw_url,
-            inStock: snap.in_stock !== false,
-            scrapedAt: snap.snapshot_at,
-            freshness,
-            packInfo: raw.raw_pack_info
-          });
-        }
-      }
-
-      if (supplierPrices.length > 0) {
-        const firstPack = supplierPrices[0].unitsPerPack;
-        const allSamePack = supplierPrices.every(o => o.unitsPerPack === firstPack);
-        if (allSamePack) {
-          supplierPrices.sort((a, b) => a.casePrice - b.casePrice);
-        } else {
-          supplierPrices.sort((a, b) => a.unitPrice - b.unitPrice);
-        }
-        const cheapest = supplierPrices[0];
-        const secondCheapest = supplierPrices.length > 1 ? supplierPrices[1] : null;
-
-        if (supplierFilter && cheapest.supplier.toLowerCase() !== supplierFilter.toLowerCase()) {
-          continue;
-        }
-
-        // STEP 5: Strict Pack Compatibility Check for Case vs Unit Saving
-        let comparisonBasis = 'CASE';
-        let absoluteSaving = 0;
-        let percentageSaving = 0;
-
-        if (secondCheapest) {
-          if (cheapest.unitsPerPack === secondCheapest.unitsPerPack) {
-            // MODE A — SAME PACK: Case-level comparison
-            comparisonBasis = 'CASE';
-            absoluteSaving = secondCheapest.casePrice - cheapest.casePrice;
-            percentageSaving = (absoluteSaving / secondCheapest.casePrice) * 100;
-          } else {
-            // MODE B — DIFFERENT CASE COUNT: Compare unit prices strictly!
-            comparisonBasis = 'UNIT';
-            const unitSaving = secondCheapest.unitPrice - cheapest.unitPrice;
-            if (unitSaving > 0) {
-              absoluteSaving = unitSaving;
-              percentageSaving = (unitSaving / secondCheapest.unitPrice) * 100;
-            }
-          }
-        }
-
-        dealsList.push({
-          id: catItem.id,
-          barcode: catItem.barcode,
-          name: catItem.name,
-          category: catItem.category || 'Soft Drinks',
-          priceMark: catItem.source_price_mark,
-          imageUrl,
-          cheapestSupplier: cheapest.supplier,
-          cheapestPrice: cheapest.casePrice,
-          cheapestUnitPrice: cheapest.unitPrice,
-          unitsPerPack: cheapest.unitsPerPack,
-          secondCheapestSupplier: secondCheapest?.supplier || null,
-          secondCheapestPrice: secondCheapest?.casePrice || null,
-          comparisonBasis,
-          absoluteSaving: absoluteSaving.toFixed(2),
-          percentageSaving: percentageSaving.toFixed(0),
-          supplierCount: supplierPrices.length,
-          allPrices: supplierPrices,
-          scrapedAt: cheapest.scrapedAt,
-          freshness: cheapest.freshness,
-          inStock: cheapest.inStock
-        });
-      }
-    }
-
-    if (sortBy === 'saving_desc') dealsList.sort((a, b) => parseFloat(b.absoluteSaving) - parseFloat(a.absoluteSaving));
-    else if (sortBy === 'pct_desc') dealsList.sort((a, b) => parseFloat(b.percentageSaving) - parseFloat(a.percentageSaving));
-    else if (sortBy === 'price_asc') dealsList.sort((a, b) => a.cheapestPrice - b.cheapestPrice);
-    else if (sortBy === 'updated_desc') dealsList.sort((a, b) => new Date(b.scrapedAt) - new Date(a.scrapedAt));
-
-    return res.json({ success: true, deals: dealsList });
-  } catch (err) {
-    console.error('[Retailer API] Deals error:', err.message);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// 4. GET /api/retailer/product/:id - Product Detail View with Previous & Historical Prices
-router.get('/product/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const { data: item } = await supabase
-      .from('catalogue_items')
-      .select('*')
-      .eq('id', id)
-      .single();
-
-    if (!item) return res.status(404).json({ success: false, error: 'Product not found.' });
-
-    const verifiedRawIds = await getVerifiedRawProductIds();
-
-    const { data: rawProds } = await supabase
-      .from('raw_products')
-      .select('id, supplier_id, raw_title, raw_barcode, raw_product_code, raw_url, raw_pack_info, raw_image_url, suppliers(id, name)')
-      .eq('raw_barcode', item.barcode)
-      .in('id', Array.from(verifiedRawIds));
-
-    const rawIds = (rawProds || []).map(r => r.id);
-
-    const { data: snapshots } = await supabase
-      .from('price_snapshots')
-      .select('*')
-      .in('raw_product_id', rawIds)
-      .order('snapshot_at', { ascending: false });
-
-    const supplierOffers = [];
-    let imageUrl = null;
-    const now = Date.now();
-
-    for (const raw of (rawProds || [])) {
-      if (raw.raw_image_url && !imageUrl) imageUrl = raw.raw_image_url;
-      const rawSnaps = (snapshots || []).filter(s => s.raw_product_id === raw.id);
-
-      if (rawSnaps.length > 0) {
-        const latestSnap = rawSnaps[0];
-        const previousSnap = rawSnaps.length > 1 ? rawSnaps[1] : null;
-
-        const packMeta = ProductMetadataParser.parseCanonicalPack(raw.raw_title, raw.raw_pack_info);
-        const currentPrice = parseFloat(latestSnap.case_price || 0);
-        const metrics = ProductMetadataParser.calculateNormalizedMetrics(currentPrice, packMeta.unitsPerPack, packMeta.totalVolumeLitres);
-
-        const previousPrice = previousSnap ? parseFloat(previousSnap.case_price || 0) : null;
-        const priceDiff = previousPrice ? (currentPrice - previousPrice) : null;
-
-        // Calculate 7-day and 30-day historical averages
-        const sevenDaysAgo = now - 7 * 24 * 3600 * 1000;
-        const thirtyDaysAgo = now - 30 * 24 * 3600 * 1000;
-
-        const snaps7d = rawSnaps.filter(s => new Date(s.snapshot_at).getTime() >= sevenDaysAgo);
-        const snaps30d = rawSnaps.filter(s => new Date(s.snapshot_at).getTime() >= thirtyDaysAgo);
-
-        const avg7d = snaps7d.length > 0 ? (snaps7d.reduce((a, s) => a + parseFloat(s.case_price || 0), 0) / snaps7d.length) : null;
-        const avg30d = snaps30d.length > 0 ? (snaps30d.reduce((a, s) => a + parseFloat(s.case_price || 0), 0) / snaps30d.length) : null;
-
-        supplierOffers.push({
-          supplierId: raw.supplier_id,
-          supplierName: raw.suppliers?.name?.toUpperCase() || 'WHOLESALER',
-          casePrice: currentPrice,
-          unitPrice: metrics.unitPrice,
-          unitsPerPack: packMeta.unitsPerPack,
-          unitSize: packMeta.unitSize,
-          pmpValue: packMeta.pmpValue,
-          isPriceMarked: packMeta.isPriceMarked,
-          previousPrice: previousPrice ? previousPrice.toFixed(2) : null,
-          priceDiff: priceDiff ? priceDiff.toFixed(2) : null,
-          sevenDayAvg: avg7d ? avg7d.toFixed(2) : null,
-          thirtyDayAvg: avg30d ? avg30d.toFixed(2) : null,
-          packInfo: raw.raw_pack_info || `${packMeta.unitsPerPack} units`,
-          inStock: latestSnap.in_stock !== false,
-          supplierCode: raw.raw_product_code,
-          supplierUrl: raw.raw_url, // EXACT SOURCE PRODUCT URL
-          lastUpdated: latestSnap.snapshot_at
-        });
-      }
-    }
-
-    supplierOffers.sort((a, b) => a.casePrice - b.casePrice);
-
-    res.json({
-      success: true,
-      product: {
-        id: item.id,
-        barcode: item.barcode,
-        name: item.name,
-        category: item.category || 'General Wholesale',
-        priceMark: item.source_price_mark,
-        imageUrl,
-        offers: supplierOffers
-      }
-    });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// 5. GET /api/retailer/product/:id/history - Price History Trends
-router.get('/product/:id/history', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const days = parseInt(req.query.days || '30', 10);
-
-    const { data: item } = await supabase
-      .from('catalogue_items')
-      .select('barcode')
-      .eq('id', id)
-      .single();
-
-    if (!item) return res.status(404).json({ success: false, error: 'Product not found.' });
-
-    const verifiedRawIds = await getVerifiedRawProductIds();
-
-    const { data: rawProds } = await supabase
-      .from('raw_products')
-      .select('id, supplier_id, suppliers(name)')
-      .eq('raw_barcode', item.barcode)
-      .in('id', Array.from(verifiedRawIds));
-
-    const rawIds = (rawProds || []).map(r => r.id);
-
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - days);
-
-    const { data: snapshots } = await supabase
-      .from('price_snapshots')
-      .select('id, raw_product_id, case_price, unit_cost, snapshot_at')
-      .in('raw_product_id', rawIds)
-      .gte('snapshot_at', cutoffDate.toISOString())
-      .order('snapshot_at', { ascending: true });
-
-    const historyPoints = (snapshots || []).map(s => {
-      const r = (rawProds || []).find(rp => rp.id === s.raw_product_id);
-      return {
-        id: s.id,
-        supplierName: r?.suppliers?.name?.toUpperCase() || 'WHOLESALER',
-        casePrice: parseFloat(s.case_price),
-        unitCost: parseFloat(s.unit_cost || s.case_price / 12),
-        date: s.snapshot_at
-      };
-    });
-
-    res.json({ success: true, history: historyPoints });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
