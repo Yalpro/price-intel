@@ -537,6 +537,12 @@ router.post('/review-queue/reject', verifyAdminRole, async (req, res) => {
       await supabase.from('product_search_logs').update({ result_status: 'rejected' }).eq('id', search_log_id);
     }
 
+    res.json({ success: true, decision: newDec, status: 'ADMIN_REJECTED' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // 11. GET /api/admin/catalogues/dashboard-stats - Operational KPIs & Trend Data
 router.get('/dashboard-stats', verifyAdminRole, async (req, res) => {
   try {
