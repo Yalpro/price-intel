@@ -641,34 +641,81 @@ class BaseScraper {
         const rawTitle = finalResult.rawTitle || product.product_name;
         const rawPackInfo = ProductMetadataParser.sanitizePackInfo(finalResult.rawPackInfo);
 
-        const rawProductCode = finalResult.rawProductCode || finalResult.rawBarcode || null;
+        const rawProductCode = finalResult.rawProductCode || null;
         const rawUrl = finalResult.rawUrl || null;
 
-        let { data: rawProduct, error: rawError } = await supabase
-          .from('raw_products')
-          .upsert(
-            {
-              supplier_id: this.supplierRow.id,
-              raw_title: rawTitle,
-              raw_barcode: product.barcode,
-              raw_product_code: rawProductCode,
-              raw_url: rawUrl,
-              raw_pack_info: rawPackInfo,
-              scraped_at: now,
-            },
-            { onConflict: 'supplier_id,raw_barcode' }
-          )
-          .select()
-          .single();
+        // IMMUTABLE SUPPLIER-PRODUCT IDENTITY
+        // A raw_product row represents a SPECIFIC supplier listing, not just a barcode+supplier combo.
+        // If two supplier listings for the same catalogue barcode have different supplier product codes,
+        // they MUST be stored as separate rows — otherwise snapshot history is contaminated.
+        //
+        // Priority:
+        //   1. supplier_id + raw_product_code (immutable supplier listing identity)
+        //      → used when the scraper has identified a specific supplier product code
+        //   2. supplier_id + raw_barcode (fallback when no supplier product code exists)
+        //      → only used for suppliers that don't expose product codes
+        //
+        // NEVER overwrite raw_product_code with a different code on an existing row.
+        // A different supplier code = a different supplier listing = a different raw_product row.
+        let rawProduct, rawError;
 
-        if (rawError && rawError.message.includes('schema cache')) {
-          const fallbackRes = await supabase
+        if (rawProductCode) {
+          // PATH A: Use supplier_id + raw_product_code as the immutable identity key.
+          // First try to find an existing row with this exact code.
+          const { data: existing } = await supabase
+            .from('raw_products')
+            .select('id')
+            .eq('supplier_id', this.supplierRow.id)
+            .eq('raw_product_code', rawProductCode)
+            .maybeSingle();
+
+          if (existing) {
+            // Update the existing supplier-listing row (mutable fields only: title, pack, url, scraped_at).
+            // raw_product_code is the stable key — never overwrite it here.
+            const { data: updated, error: updateErr } = await supabase
+              .from('raw_products')
+              .update({
+                raw_title: rawTitle,
+                raw_barcode: product.barcode,
+                raw_url: rawUrl,
+                raw_pack_info: rawPackInfo,
+                scraped_at: now,
+              })
+              .eq('id', existing.id)
+              .select()
+              .single();
+            rawProduct = updated;
+            rawError = updateErr;
+          } else {
+            // No existing row for this supplier code — insert a new immutable row.
+            const { data: inserted, error: insertErr } = await supabase
+              .from('raw_products')
+              .insert({
+                supplier_id: this.supplierRow.id,
+                raw_title: rawTitle,
+                raw_barcode: product.barcode,
+                raw_product_code: rawProductCode,
+                raw_url: rawUrl,
+                raw_pack_info: rawPackInfo,
+                scraped_at: now,
+              })
+              .select()
+              .single();
+            rawProduct = inserted;
+            rawError = insertErr;
+          }
+        } else {
+          // PATH B: No supplier product code — fall back to supplier_id + raw_barcode upsert.
+          // This is the legacy path for suppliers that don't expose product codes.
+          // Accept the mutation risk here since we have no better key.
+          const { data: upserted, error: upsertErr } = await supabase
             .from('raw_products')
             .upsert(
               {
                 supplier_id: this.supplierRow.id,
                 raw_title: rawTitle,
                 raw_barcode: product.barcode,
+                raw_url: rawUrl,
                 raw_pack_info: rawPackInfo,
                 scraped_at: now,
               },
@@ -676,8 +723,8 @@ class BaseScraper {
             )
             .select()
             .single();
-          rawProduct = fallbackRes.data;
-          rawError = fallbackRes.error;
+          rawProduct = upserted;
+          rawError = upsertErr;
         }
 
         if (rawError) throw new Error(`raw_products upsert failed: ${rawError.message}`);

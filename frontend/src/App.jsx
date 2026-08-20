@@ -26,9 +26,12 @@ import SubscriberManagement from './pages/admin/SubscriberManagement';
 import DailyDealsPreview from './pages/admin/DailyDealsPreview';
 import AdminSettings from './pages/admin/AdminSettings';
 
+import ScraperRunHistory from './pages/ScraperRunHistory';
+
 // Retailer Portal Pages
 import DailyDeals from './pages/retailer/DailyDeals';
 import ProductSearch from './pages/retailer/ProductSearch';
+import ProductDetail from './pages/retailer/ProductDetail';
 import ProductRequest from './pages/retailer/ProductRequest';
 import Account from './pages/retailer/Account';
 
@@ -57,6 +60,7 @@ function App() {
             <Route index element={<Dashboard />} />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="scraper-runs" element={<ScraperMonitoring />} />
+            <Route path="scraper-runs/history" element={<ScraperRunHistory />} />
             <Route path="suppliers" element={<SupplierManagement />} />
             <Route path="catalogue" element={<SKUCatalogue />} />
             <Route path="products" element={<ProductLogs />} />
@@ -77,6 +81,7 @@ function App() {
             <Route index element={<DailyDeals />} />
             <Route path="deals" element={<DailyDeals />} />
             <Route path="search" element={<ProductSearch />} />
+            <Route path="product/:id" element={<ProductDetail />} />
             <Route path="request" element={<ProductRequest />} />
             <Route path="account" element={<Account />} />
             <Route path="subscription" element={<Account />} />

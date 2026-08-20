@@ -4,6 +4,8 @@ import { supabase } from '../../supabaseClient';
 import { ArrowRight, AlertTriangle, Eye, EyeOff, ShieldCheck } from 'lucide-react';
 import AnapriceLogo from '../../components/AnapriceLogo';
 
+import { useAuth } from '../../contexts/AuthContext';
+
 const SharedLogin = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -14,6 +16,19 @@ const SharedLogin = () => {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const { user, profile } = useAuth();
+
+  React.useEffect(() => {
+    if (user && profile) {
+      const isAdmin = ['admin', 'manager'].includes(profile.role);
+      const from = location.state?.from?.pathname;
+      if (isAdmin) {
+        navigate(from && from.startsWith('/admin') ? from : '/admin/dashboard', { replace: true });
+      } else {
+        navigate(from && from.startsWith('/app') ? from : '/app', { replace: true });
+      }
+    }
+  }, [user, profile, navigate, location]);
 
   const handleResendConfirmation = async () => {
     if (!email.trim()) {

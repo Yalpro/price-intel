@@ -104,7 +104,7 @@ class ProductMetadataParser {
     const caseMatch = text.match(/\bcase\s+of\s+(\d+)\b/i);
     if (caseMatch) return parseInt(caseMatch[1], 10);
 
-    const match = text.match(/\b(\d+)\s*(?:x|\*|pack|pk|cans|bottles)\b/i);
+    const match = text.match(/\b(\d+)\s*(?:x|\*|pack|pk|cans|bottles)/i);
     return match ? parseInt(match[1], 10) : null;
   }
 
@@ -212,7 +212,7 @@ class ProductMetadataParser {
    */
   static extractPriceMark(text) {
     if (!text) return null;
-    const match = text.match(/\b(?:PM|PMP)\s*£?\s*(\d+(?:\.\d{1,2})?|\d{2,4})\b/i);
+    const match = text.match(/\b(?:PM|PMP)\s*£?\s*(\d+(?:\.\d{1,2})?|\d{2,4})\b/i) || text.match(/£\s*(\d+(?:\.\d{1,2})?)\s*(?:PM|PMP)\b/i);
     if (!match) return null;
     let valStr = match[1];
     if (valStr.includes('.')) {
@@ -328,6 +328,81 @@ class ProductMetadataParser {
     const candStripped = this.normalizeText(this.stripPackCountSuffix(candTitle));
 
     return csvStripped.length > 0 && csvStripped === candStripped;
+  }
+
+  /**
+   * STEP 3: Canonical Pack Model
+   * Extracts canonical pack structure from title & pack info.
+   */
+  static parseCanonicalPack(title, packInfo, casePrice = null) {
+    const combined = `${title || ''} ${packInfo || ''}`.trim();
+    let qty = this.extractQuantity(combined);
+    const vol = this.extractVolume(combined);
+    const weight = this.extractWeight(combined);
+    const pmpVal = this.extractPriceMark(combined);
+
+    // Fallback: If case price > £8.00 for a 330ml/500ml drink and qty is missing or 1, default to standard wholesale 24 pack
+    if ((!qty || qty === 1) && vol && (vol.includes('330ml') || vol.includes('500ml') || vol.includes('250ml'))) {
+      if (casePrice && casePrice >= 8.00) {
+        qty = 24;
+      }
+    }
+
+    if (!qty) qty = 1;
+
+    let unitSizeVal = null;
+    let unitSizeUnit = null;
+
+    if (vol) {
+      const match = vol.match(/^(\d+(?:\.\d+)?)(ml|l|cl)$/i);
+      if (match) {
+        unitSizeVal = parseFloat(match[1]);
+        unitSizeUnit = match[2].toLowerCase();
+      }
+    } else if (weight) {
+      const match = weight.match(/^(\d+(?:\.\d+)?)(g|kg|oz)$/i);
+      if (match) {
+        unitSizeVal = parseFloat(match[1]);
+        unitSizeUnit = match[2].toLowerCase();
+      }
+    }
+
+    let totalVolumeLitres = null;
+    if (unitSizeVal && unitSizeUnit) {
+      if (unitSizeUnit === 'l') totalVolumeLitres = qty * unitSizeVal;
+      else if (unitSizeUnit === 'ml') totalVolumeLitres = (qty * unitSizeVal) / 1000;
+    }
+
+    return {
+      unitsPerPack: qty,
+      unitSize: vol || weight || null,
+      unitSizeVal,
+      unitSizeUnit,
+      totalVolumeLitres,
+      pmpValue: pmpVal ? parseFloat(pmpVal) : null,
+      isPriceMarked: Boolean(pmpVal)
+    };
+  }
+
+  /**
+   * STEP 6: Authoritative Price Metrics
+   */
+  static calculateNormalizedMetrics(casePrice, unitsPerPack, totalVolumeLitres) {
+    if (!casePrice || casePrice <= 0) return null;
+    const qty = unitsPerPack && unitsPerPack > 0 ? unitsPerPack : 1;
+    const unitPrice = parseFloat((casePrice / qty).toFixed(4));
+
+    let pricePerLitre = null;
+    if (totalVolumeLitres && totalVolumeLitres > 0) {
+      pricePerLitre = parseFloat((casePrice / totalVolumeLitres).toFixed(4));
+    }
+
+    return {
+      casePrice: parseFloat(casePrice.toFixed(2)),
+      unitsPerPack: qty,
+      unitPrice: parseFloat(unitPrice.toFixed(2)),
+      pricePerLitre: pricePerLitre ? parseFloat(pricePerLitre.toFixed(2)) : null
+    };
   }
 }
 

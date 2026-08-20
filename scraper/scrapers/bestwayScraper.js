@@ -261,10 +261,7 @@ class BestwayScraper extends BaseScraper {
     const rsp    = product.rsp ? parseFloat(product.rsp) : null;
     const minPOR = product.minPOR ? parseFloat(product.minPOR) : null;
 
-    // Pack info from productDimensions, packSize or altName
-    const rawPackInfo = product.productDimensions || product.packSize || product.altName || null;
-
-    // Pack count from retailSize (primary), caseSize, title, or rawPackInfo
+    // Pack count from retailSize (primary), caseSize, title, or structured dimensions
     const packCountFromRetail = product.retailSize ? parseInt(product.retailSize, 10) : null;
     const packCountFromCase   = product.caseSize ? parseInt(product.caseSize, 10) : null;
     
@@ -272,7 +269,18 @@ class BestwayScraper extends BaseScraper {
       ? packCountFromRetail
       : (packCountFromCase && packCountFromCase >= 2 && packCountFromCase <= 200)
         ? packCountFromCase
-        : (this.extractPackCount(rawTitle) || this.extractPackCount(rawPackInfo));
+        : (this.extractPackCount(rawTitle) || this.extractPackCount(product.productDimensions || product.packSize || product.altName));
+
+    // Construct rawPackInfo with authoritative structured metadata if available
+    let rawPackInfo = product.productDimensions || null;
+    if (!rawPackInfo) {
+      const unitDescriptor = product.packSize || product.altName || null;
+      if (packCount && unitDescriptor && !unitDescriptor.toLowerCase().includes('x')) {
+        rawPackInfo = `${packCount} x ${unitDescriptor}`;
+      } else {
+        rawPackInfo = unitDescriptor;
+      }
+    }
 
     // Derive case price (returns null if packCount is missing)
     const price = this.deriveCasePrice(rsp, minPOR, packCount);
